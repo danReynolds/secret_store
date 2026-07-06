@@ -8,6 +8,8 @@ library;
 export 'src/backend.dart' show BackendCapabilities, BackendInfo, SecretBackend;
 export 'src/backends/encrypted_file_backend.dart'
     show EncryptedFileBackend, maxContainerBytes;
+export 'src/backends/keychain_backend.dart' show KeychainBackend;
+export 'src/ffi/keychain.dart' show KeychainApi, KeychainProbe, MacKeychainApi;
 export 'src/errors.dart'
     show
         AuthenticationFailed,
@@ -24,6 +26,7 @@ export 'src/key_source.dart'
     show
         FileKeySource,
         InMemoryKeySource,
+        KeychainKeySource,
         KeySource,
         KeySourceStatus,
         generateStoreKey,
