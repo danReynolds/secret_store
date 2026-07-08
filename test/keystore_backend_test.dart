@@ -91,11 +91,11 @@ void main() {
     });
   });
 
-  group('KeystoreKeySource + EncryptedFileBackend (model B)', () {
+  group('SystemKeySource + EncryptedFileBackend (model B)', () {
     test('wraps the container key in the keychain; container stays encrypted',
         () async {
       final api = FakeKeystoreApi();
-      final ks = KeystoreKeySource(service: 'dune/uuid', api: api);
+      final ks = SystemKeySource(service: 'dune/uuid', api: api);
       // Uses a real temp file for the container.
       final dir = Directory.systemTemp.createTempSync('ss_modelb_');
       addTearDown(() => dir.deleteSync(recursive: true));
@@ -119,7 +119,7 @@ void main() {
     test('locked keychain surfaces as StoreKeyMissing-free typed error',
         () async {
       final api = FakeKeystoreApi()..locked = true;
-      final ks = KeystoreKeySource(service: 's', api: api);
+      final ks = SystemKeySource(service: 's', api: api);
       final dir = Directory.systemTemp.createTempSync('ss_locked_');
       addTearDown(() => dir.deleteSync(recursive: true));
       final be = EncryptedFileBackend(path: '${dir.path}/c.enc', keySource: ks);

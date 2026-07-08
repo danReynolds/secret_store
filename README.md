@@ -23,48 +23,61 @@ convenience tier. The core keeps values as `Uint8List` rather than routing them
 through interned `String`s — though note Dart's GC can't zero heap memory, so
 this is copy-minimisation, not a zeroing guarantee (see the threat model).
 
-## How storage is chosen
+## How your data is protected at rest
 
 You express intent; the library picks the strongest backing the platform
-offers. `SecretStorage(service:)` uses the OS keystore, and resolution is
-**fail-closed** — on a platform with no usable keystore it throws rather than
-silently degrading. You never choose between "keystore items" and "encrypted
-file"; that's the library's per-platform decision. `describe()` reports what you
-got.
+offers. `SecretStorage(service:)` uses the OS keystore, **fail-closed** (on a
+platform with no usable keystore it throws rather than silently degrading), and
+`describe()` reports what you got. But *how strong* "at rest" actually is
+depends on the device — this is the part to understand before you rely on it.
 
-| Platform | Backing | Notes |
-|---|---|---|
-| macOS | Keychain via `SecItem` FFI | classic login keychain by default; never synchronized to iCloud; secrets move as `CFData`. |
-| Linux | Secret Service via `secret-tool` | secret crosses on stdin (never argv); every call has a hard timeout so a locked keyring can't hang an SSH session. |
+Two layers are in play. If you use the **encrypted-file** store, your secrets
+are always sealed with **XChaCha20-Poly1305 + HKDF + a key-commitment header**;
+what varies per platform is how the **wrapping key** (or, for direct keystore
+items, the secret itself) is protected:
 
-**macOS top security (opt-in).** A signed app that carries the Keychain Sharing
-entitlement can opt up to the Data Protection keychain + Secure Enclave — one
-line, no access group needed (the default group is implicit):
+| Platform | Zero-config default | Key protected at rest by | Strength | Hardware-backed option |
+|---|---|---|---|---|
+| **macOS** | login Keychain | **3DES-CBC** under a key derived from your **login password** (PBKDF2-HMAC-SHA1); no entitlement needed, works from `dart run` | password-bound (S3) | **DP keychain + Secure Enclave** — AES-256-GCM, non-exportable hardware key (**S1**), for a signed + entitled app |
+| **Linux (desktop)** | Secret Service | **gnome-keyring** AES-128-CBC / **KWallet** Blowfish; readable by any same-user process while the keyring is unlocked | password-bound (S3) | — (no mainstream desktop HSM path) |
+| **Linux (headless)** | *fail-closed* (no desktop keyring) | `TpmKeySource`: **systemd-creds AES-256-GCM, TPM-sealed** — the on-disk container is useless without that host's TPM chip | **hardware (S1)** | this *is* the option; falls back to nothing (you supply the key) if there's no TPM |
+| **Windows / iOS / Android** | *planned* | — | — | — |
+
+`S1…S3` are the tiers from [doc/design.md](doc/design.md) (S1 hardware-bound →
+S3 legacy-cipher-under-a-password). Takeaways: on macOS and Linux desktop the
+default is **as strong as the user's login password** (the cipher is legacy but
+that's rarely the weak link); the **hardware-backed** paths are the macOS DP
+keychain and the Linux TPM source; and against a **stolen disk**, only the S1
+rows resist offline attack.
+
+**macOS hardware backing (opt-in).** A signed app with the Keychain Sharing
+entitlement gets the DP keychain in one line — no access group to configure:
 `SecretStorage(service: 'com.example.app', api: MacKeychainApi.dataProtection())`.
-It fails loudly if the entitlement isn't present, never silently falls back.
-*(The −34018 refusal path is CI-tested on the unsigned runner; the entitled-app
-success path is verified manually — CI can't sign an app bundle.)*
+It fails loudly (−34018) if the entitlement isn't present, never silently falls
+back. *(Refusal path CI-tested; the entitled-app success path is verified
+manually — CI can't sign a bundle.)*
 
 ### Encrypted file (headless, one backup unit, or many secrets)
 
-Where there's no unlocked keyring (a headless server), or you want a single
+Where there's no unlocked keyring (a headless server) or you want a single
 encrypted file, store everything in one authenticated container sealed by a key
-you place explicitly — the one genuine decision, since the key needs a home:
+you place explicitly — the key's home is the one genuine security decision:
 
 ```dart
 final store = SecretStorage.encryptedFile(
   path: '$stateDir/secrets.enc',
-  keySource: KeystoreKeySource(service: 'myapp/$profileId', api: platformKeystore()),
+  keySource: SystemKeySource(service: 'myapp/$profileId', api: platformKeystore()),
   contextSalt: utf8.encode(profileId),   // binds the container to this profile
 );
 ```
 
-The key source is the security-relevant choice: `KeystoreKeySource` (key in the
-OS keystore), `TpmKeySource` (headless servers — wraps the key with
-`systemd-creds`, hardware-bound to the TPM so a stolen disk is useless without
-that host's chip), or `FileKeySource` (key on disk beside the container,
-`0600`) — the **explicit insecure fallback** for environments with no keystore
-at all, which you have to name to get.
+Two secure key sources ship: **`SystemKeySource`** (the key lives in the OS
+keystore — the per-platform strengths above) and **`TpmKeySource`**
+(hardware-bound via `systemd-creds` for headless servers). Anything else —
+bring-your-own-key from a KMS, a password prompt, or an orchestrator-injected
+secret — is a `KeySource` you implement (four small methods; use the exported
+`SecureFileSystem` if you must touch disk). There is deliberately **no
+ready-made plaintext-key-on-disk source** to grab by accident.
 
 ## Threat model
 

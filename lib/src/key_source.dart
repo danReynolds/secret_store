@@ -1,9 +1,16 @@
 /// Store-key providers for the wrapped-key composition (see doc/design.md).
 ///
 /// A [KeySource] holds the single 32-byte key that seals the encrypted
-/// container. The recommended one is the OS keystore ([KeystoreKeySource]);
-/// [FileKeySource] is the explicit fallback (key on disk beside the ciphertext);
-/// [InMemoryKeySource] is for tests and callers that manage the key themselves.
+/// container. The public, secure sources are the OS keystore ([SystemKeySource])
+/// and, for headless servers, the TPM (`TpmKeySource`, in its own file).
+///
+/// [InMemoryKeySource] and [FileKeySource] are **not exported**: the first is
+/// non-persistent (tests only), the second is an insecure plaintext-key-on-disk
+/// fallback whose benign name is a footgun. They remain here as internal test
+/// helpers and reference implementations — a caller who genuinely needs a
+/// bring-your-own-key or on-disk source implements [KeySource] directly (using
+/// [SecureFileSystem] for 0600-from-birth hygiene), which makes the security
+/// tradeoff a deliberate, owned choice rather than an accidental pick.
 library;
 
 import 'dart:math';
@@ -68,8 +75,9 @@ abstract interface class KeySource {
   Future<KeySourceStatus> describe();
 }
 
-/// Holds the key in process memory only. Not persistent — for tests, and for
-/// callers that source the key themselves.
+/// Holds the key in process memory only. Not persistent. **Internal / not
+/// exported** — used by the test suite; bring-your-own-key callers implement
+/// [KeySource] directly.
 final class InMemoryKeySource implements KeySource {
   InMemoryKeySource([Uint8List? initial]) : _key = initial;
 
@@ -92,9 +100,13 @@ final class InMemoryKeySource implements KeySource {
       );
 }
 
-/// Persists the raw key to a `0600` file beside the container. This is the
-/// **insecure** fallback (the key sits next to the data it protects); callers
-/// must gate it behind an explicit opt-in (dune: `--insecure-file-secrets`).
+/// Persists the raw key to a `0600` file beside the container — **insecure**
+/// (the key sits in plaintext next to the data it protects, so a full-disk
+/// theft recovers both). **Internal / not exported**: it stays here as the
+/// reference implementation of a file-backed [KeySource] and for the test
+/// suite. A caller who consciously accepts an on-disk key implements [KeySource]
+/// themselves (this class is a fine template) — the friction makes the choice
+/// deliberate rather than an accidental autocomplete pick.
 final class FileKeySource implements KeySource {
   FileKeySource(this.path, {SecureFileSystem fs = const SecureFileSystem()})
       : _fs = fs;
@@ -136,12 +148,13 @@ final class FileKeySource implements KeySource {
       );
 }
 
-/// Wraps the store key in the OS keystore — dune's default (model B). The key
-/// itself never touches disk; only the AEAD-encrypted container does. [api] is
-/// the platform keystore (`MacKeychainApi` / `SecretToolApi`), wired by the
-/// resolver or passed explicitly. [account] is the item name under [service].
-final class KeystoreKeySource implements KeySource {
-  KeystoreKeySource({
+/// Wraps the store key in the OS keystore — the default secure Model-B source.
+/// The key itself never touches disk; only the AEAD-encrypted container does.
+/// [api] is the platform keystore (`MacKeychainApi` / `SecretToolApi`), wired by
+/// the resolver or passed explicitly. [account] is the item name under
+/// [service].
+final class SystemKeySource implements KeySource {
+  SystemKeySource({
     required this.service,
     required KeystoreApi api,
     this.account = 'store-key',

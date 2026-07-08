@@ -9,7 +9,7 @@ Initial implementation (see [doc/design.md](doc/design.md)). Not yet published.
 - **`TpmKeySource`** wraps the container store key with `systemd-creds` and
   writes only the *encrypted* blob to disk — hardware-bound to the TPM on a
   machine that has one, so a stolen disk is useless without that host's chip.
-  It's the headless analogue of `KeystoreKeySource` (drop it into
+  It's the headless analogue of `SystemKeySource` (drop it into
   `SecretStorage.encryptedFile(keySource: …)`; the container is unchanged),
   turning headless from S4 (key on disk) to S1. `TpmKeyBinding` selects
   `host+tpm2` (default, strongest), `tpm2`, or `host` (documented as *not*
@@ -20,6 +20,19 @@ Initial implementation (see [doc/design.md](doc/design.md)). Not yet published.
 - **`ProcessRunner` extracted** to `src/ffi/process_runner.dart` (was in the
   `secret-tool` file) — now shared by the Secret Service backend and the TPM
   key source. Public export path changed accordingly.
+
+### Key-source surface: secure-only (pre-release)
+
+- **`KeystoreKeySource` renamed to `SystemKeySource`** (dropped the `Key…Key`
+  stutter; pairs with `TpmKeySource`).
+- **`FileKeySource` and `InMemoryKeySource` un-exported.** The public sources
+  are now the two secure ones (`SystemKeySource`, `TpmKeySource`); the insecure
+  plaintext-key-on-disk source and the non-persistent test double stay in
+  `src/` (reference impl + test double). Bring-your-own-key or an on-disk key is
+  served by implementing the public `KeySource` interface (with the exported
+  `SecureFileSystem` for 0600 hygiene) — so an insecure choice is one you write
+  deliberately, never grab from autocomplete. README now documents at-rest
+  protection per platform.
 
 ### Security hardening pass (pre-release; container format changed while unshipped)
 

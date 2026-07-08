@@ -5,6 +5,7 @@
 // You express intent; the library picks the strongest backing per platform.
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:secret_store/secret_store.dart';
 
@@ -20,14 +21,15 @@ Future<void> main() async {
 
   // --- Encrypted file: one wrapped key + a container ------------------------
   // For headless deployments, one backup unit, or many secrets. In production
-  // the key comes from `KeystoreKeySource` (OS keystore) or a TPM; this demo
-  // uses an in-memory key so it stays self-contained and idempotent (nothing
-  // persists past the process, nothing lands in your real keychain).
+  // the key comes from `SystemKeySource` (OS keystore) or `TpmKeySource`
+  // (hardware-bound, headless). Any custom source is a KeySource you implement
+  // — shown here with a throwaway in-memory one so the demo stays
+  // self-contained and idempotent (nothing persists, nothing hits a keystore).
   final dir = Directory.systemTemp.createTempSync('secret_store_demo_');
   try {
     final fileStore = SecretStorage.encryptedFile(
       path: '${dir.path}/secrets.enc',
-      keySource: InMemoryKeySource(),
+      keySource: _EphemeralKeySource(),
       contextSalt: utf8.encode('demo-profile-uuid'),
     );
     await fileStore.writeString('db_key', 'the spice must flow');
@@ -36,4 +38,20 @@ Future<void> main() async {
   } finally {
     dir.deleteSync(recursive: true);
   }
+}
+
+/// A minimal in-memory [KeySource] — the whole extension point is these four
+/// methods. A real one would fetch the key from a KMS, a password prompt, an
+/// orchestrator-injected env var, etc.
+final class _EphemeralKeySource implements KeySource {
+  Uint8List? _key;
+  @override
+  Future<Uint8List?> read() async => _key;
+  @override
+  Future<Uint8List> create() async => _key = generateStoreKey();
+  @override
+  Future<void> delete() async => _key = null;
+  @override
+  Future<KeySourceStatus> describe() async => KeySourceStatus(
+      name: 'ephemeral', present: _key != null, available: true);
 }

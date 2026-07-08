@@ -5,9 +5,10 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:secret_store/secret_store.dart';
-// The concrete backend is internal (not exported); its own unit test reaches
-// it directly.
+// The concrete backend and the internal (unexported) key sources — the file
+// backend's own unit test reaches them directly.
 import 'package:secret_store/src/backends/encrypted_file_backend.dart';
+import 'package:secret_store/src/key_source.dart';
 import 'package:test/test.dart';
 
 void main() {

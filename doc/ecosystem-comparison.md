@@ -50,15 +50,14 @@ Ahead / Equal / Behind is relative to the *best* peer on that dimension.
 
 These are the places a reviewer should push, ordered by how much they matter.
 
-1. **No headless hardware-bound key source yet.** The server story today is
-   `FileKeySource` (key on disk, explicitly insecure) or a keystore that a
-   headless box may not have unlocked. The field has moved: `systemd-creds`
-   with TPM2 binding (AES-256-GCM, PCR-bound, secrets delivered on ramfs under
-   `/run/credentials`) is becoming the standard headless answer (LINSTOR
-   1.33.0, RHEL9 guidance, 2025–26), and keyring-rs ships a working headless
-   `keyutils` store *now*. **We are behind until the TPM `KeySource`
-   follow-up lands.** Upside: no cross-language keyring library wraps
-   systemd-creds as a backend, so shipping it would leapfrog the field.
+1. ~~**No headless hardware-bound key source yet.**~~ **RESOLVED (2026-07):
+   `TpmKeySource` shipped.** The server story now is `TpmKeySource` —
+   `systemd-creds` with TPM2 binding (AES-256-GCM, PCR-bound), fail-closed
+   without a TPM — so a headless box gets hardware-bound at-rest (S1), not a
+   key on disk. This was the field's direction (LINSTOR 1.33.0, RHEL9 guidance,
+   2025–26; keyring-rs ships headless `keyutils`), and **no other
+   cross-language keyring library wraps `systemd-creds`** — so shipping it
+   leapfrogs the peer class rather than merely catching up.
 
 2. **Memory hygiene is not airtight, and can't fully be in Dart.** We zero the
    native `malloc`/CFData staging buffers, and the Linux transport is

@@ -29,13 +29,16 @@ export 'src/ffi/posix_file.dart' show SecureFileError, SecureFileSystem;
 export 'src/ffi/process_runner.dart'
     show ProcessRunResult, ProcessRunner, SystemProcessRunner;
 export 'src/ffi/secret_service.dart' show SecretToolApi;
+// Only the secure, persistent sources are exported. `InMemoryKeySource`
+// (non-persistent) and `FileKeySource` (plaintext key on disk) are internal:
+// a caller who needs bring-your-own-key or an on-disk key implements the
+// `KeySource` interface directly (with `SecureFileSystem` for file hygiene),
+// making the security tradeoff a deliberate choice, not an accidental pick.
 export 'src/key_source.dart'
     show
-        FileKeySource,
-        InMemoryKeySource,
         KeySource,
         KeySourceStatus,
-        KeystoreKeySource,
+        SystemKeySource,
         generateStoreKey,
         storeKeyLength;
 export 'src/tpm_key_source.dart' show TpmKeyBinding, TpmKeySource;

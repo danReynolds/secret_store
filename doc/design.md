@@ -57,8 +57,8 @@ SecretBackend  (seam)    KeystoreBackend | EncryptedFileBackend
      │                        │                    │
 KeystoreApi (seam)            │              Container (AEAD+TLV)
   MacKeychainApi (SecItem FFI)│              KeySource:
-  SecretToolApi (secret-tool) │                KeystoreKeySource (wraps key in keystore)
-                              │                FileKeySource (insecure fallback)
+  SecretToolApi (secret-tool) │                SystemKeySource (key in OS keystore)
+                              │                TpmKeySource (systemd-creds, headless)
                               └── SecureFileSystem (POSIX FFI: 0600, fsync, atomic)
 ```
 
@@ -94,7 +94,7 @@ final store = SecretStorage(service: 'myapp', api: MacKeychainApi.dataProtection
 
 // 3. Encrypted file — headless (no keyring), one backup unit, or many secrets.
 //    The key source is the one real decision (where the key lives).
-final store = SecretStorage.encryptedFile(path: p, keySource: KeystoreKeySource(...));
+final store = SecretStorage.encryptedFile(path: p, keySource: SystemKeySource(...));
 
 // (SecretStorage.withBackend(fake) remains as the test / custom escape hatch.)
 
@@ -147,7 +147,7 @@ abstract interface class SecretBackend {
 **The keystore seam is async.** A keystore is an IO boundary: the macOS binding
 resolves immediately (synchronous FFI wrapped in a future), the Linux binding
 spawns a subprocess with a timeout. One generic `KeystoreApi` /
-`KeystoreBackend` / `KeystoreKeySource` serves both platforms.
+`KeystoreBackend` / `SystemKeySource` serves both platforms.
 
 **macOS FFI discipline.** CoreFoundation is manually reference-counted — the one
 place *we* can write a memory-safety bug. Contained by a tiny scope
@@ -202,7 +202,7 @@ key; the secrets live in an encrypted container sealed by that key. Reached via
 ```dart
 final store = SecretStorage.encryptedFile(
   path: '$dir/secrets.enc',
-  keySource: KeystoreKeySource(service: 'myapp/$profileId', api: platformKeystore()),
+  keySource: SystemKeySource(service: 'myapp/$profileId', api: platformKeystore()),
   contextSalt: utf8.encode(profileId),
 );
 ```
@@ -415,25 +415,27 @@ Model B always adds it):
 its own OS-keystore item) and `EncryptedFileBackend` (**Model B** — all secrets
 in one XChaCha20-Poly1305 container sealed by a `KeySource` key). One
 `KeystoreApi` **binding per OS** — `MacKeychainApi`, `SecretToolApi`, an iOS
-`SecItem` binding, `WinCredApi` — and a set of `KeySource`s for Model B
-(`KeystoreKeySource`, `FileKeySource`, `InMemoryKeySource`, `TpmKeySource`, and
-the planned `AndroidKeystoreKeySource` / `DpapiKeySource`).
+`SecItem` binding, `WinCredApi` — and the public `KeySource`s for Model B
+(`SystemKeySource`, `TpmKeySource`; the planned `AndroidKeystoreKeySource` /
+`DpapiKeySource`). `InMemoryKeySource` and `FileKeySource` exist but are
+**internal, not exported** — non-persistent / insecure respectively; a caller
+who needs bring-your-own-key or an on-disk key implements `KeySource` directly.
 
 **Per-platform matrix — what we promote, and its tier:**
 
 | Platform | Promoted default | Tier | Opt-in alternatives | Status |
 |---|---|---|---|---|
-| **macOS** | A — login-keychain items | **S3** (weak integrity) | B + `KeystoreKeySource` → S3 **+ AEAD integrity + portable file**; B + `FileKeySource` → S4; A on **DP keychain** (`MacKeychainApi.dataProtection()`) → **S1** (signed, entitled apps) | A shipped; DP shipped (success path manual-verify) |
-| **Linux** | A — Secret Service items | **S3** (weak integrity) | B + `KeystoreKeySource` → S3 + integrity + portable; B + `FileKeySource` → S4; B + `TpmKeySource` → **S1** | A + TPM shipped |
-| **iOS** | A — DP-keychain items + Secure Enclave | **S1** (per-item access control) | B + `KeystoreKeySource` → S1 key but whole-store granularity (rarely worth it) | planned |
-| **Android** | **B** + `AndroidKeystoreKeySource` (no Model A — Keystore has no general secret-item API) | **S1** key + AEAD container | B + `FileKeySource` in the app sandbox → S4 (self-test fallback) | planned |
-| **Windows** | A — Credential Manager (DPAPI) *or* B (TBD) | **S3** either way | the other of A/B; B + `FileKeySource` → S4 | planned |
+| **macOS** | A — login-keychain items | **S3** (weak integrity) | B + `SystemKeySource` → S3 **+ AEAD integrity + portable file**; B + a caller's on-disk `KeySource` → S4; A on **DP keychain** (`MacKeychainApi.dataProtection()`) → **S1** (signed, entitled apps) | A shipped; DP shipped (success path manual-verify) |
+| **Linux** | A — Secret Service items | **S3** (weak integrity) | B + `SystemKeySource` → S3 + integrity + portable; B + a caller's on-disk `KeySource` → S4; B + `TpmKeySource` → **S1** | A + TPM shipped |
+| **iOS** | A — DP-keychain items + Secure Enclave | **S1** (per-item access control) | B + `SystemKeySource` → S1 key but whole-store granularity (rarely worth it) | planned |
+| **Android** | **B** + `AndroidKeystoreKeySource` (no Model A — Keystore has no general secret-item API) | **S1** key + AEAD container | B + an on-disk key in the app sandbox → S4 (self-test fallback) | planned |
+| **Windows** | A — Credential Manager (DPAPI) *or* B (TBD) | **S3** either way | the other of A/B; B + a caller's on-disk `KeySource` → S4 | planned |
 
 Three things this table encodes:
 
 1. **Best-per-platform does *not* multiply the platform surface.** The
    platform-specific code is the `KeystoreApi` binding, and **both models use
-   the same binding** — Model A directly, Model B through `KeystoreKeySource`.
+   the same binding** — Model A directly, Model B through `SystemKeySource`.
    So promoting A on macOS/Linux/iOS and B on Android is the *same* set of
    bindings composed two ways, not two bespoke stacks. The only genuinely
    extra per-platform code Model B adds is a specialized `KeySource` where the
@@ -613,9 +615,18 @@ Non-obvious things the build settled:
   can't zero anyway → `dart:convert`), and the **Unicode format/bidi label
   validation** (heavier than the keystore-UI-spoofing threat → plain
   control-char + length check). Kept and reframed: key commitment (cheap
-  defense-in-depth + the error distinction), `FileKeySource` (the honest
-  insecure floor), the String conveniences (dropping them adds friction for
-  ~zero hygiene gain — the caller's `String` exists regardless).
+  defense-in-depth + the error distinction), the String conveniences (dropping
+  them adds friction for ~zero hygiene gain — the caller's `String` exists
+  regardless).
+- **Public key-source surface = secure-only (2026-07).** `SystemKeySource` and
+  `TpmKeySource` are the exported sources; both are secure. `FileKeySource`
+  (plaintext key on disk — a benign name that invites an accidental insecure
+  pick) and `InMemoryKeySource` (non-persistent) were **un-exported**: they
+  stay in `src/` as the reference impl and the test double. Bring-your-own-key
+  / on-disk needs are served by the public `KeySource` interface + exported
+  `SecureFileSystem` — so the insecure choice is one a caller writes
+  deliberately, never grabs from autocomplete. Also renamed
+  `KeystoreKeySource` → `SystemKeySource` (dropped the `Key…Key` stutter).
 - Crypto dependency: stay exact-pinned on `cryptography 2.9.0` (2026-07 review:
   latest release; our two primitives are its healthiest code; every known vuln
   is in unused AES paths), construct the `Dart*` implementations directly, CI

@@ -4,10 +4,10 @@
 /// The 32-byte container store key is wrapped by `systemd-creds encrypt` and
 /// only the *encrypted* blob is written to disk. On a machine with a TPM the
 /// wrapping key never leaves the chip, so a stolen disk is useless without that
-/// host's TPM — turning the headless deployment from "key on disk"
-/// ([FileKeySource], no real at-rest protection) into hardware-bound at rest.
+/// host's TPM — turning the headless deployment from a plaintext key on disk
+/// (no real at-rest protection) into hardware-bound at rest.
 ///
-/// This is the headless analogue of [KeystoreKeySource]: swap it in and the
+/// This is the headless analogue of [SystemKeySource]: swap it in and the
 /// container stays byte-for-byte the same. It shells out to `systemd-creds`
 /// over the injectable [ProcessRunner] (so the command construction and error
 /// mapping are unit-testable, and the real round-trip is integration-tested in
@@ -36,10 +36,9 @@ enum TpmKeyBinding {
 
   /// Host key only — **not hardware-bound**. The wrapping key lives on the same
   /// disk as the blob (`/var/lib/systemd/credential.secret`), so a full-disk
-  /// theft recovers it; this is barely stronger than [FileKeySource]. Provided
-  /// for no-TPM environments and for testing the round-trip. Prefer a TPM
-  /// binding for real protection, or `FileKeySource` if you consciously accept
-  /// an on-disk key.
+  /// theft recovers it; this is barely stronger than a plaintext key on disk.
+  /// Provided for no-TPM environments and for testing the round-trip. Prefer a
+  /// TPM binding for real protection.
   host('host');
 
   const TpmKeyBinding(this.value);
