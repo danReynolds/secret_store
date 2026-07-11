@@ -100,6 +100,8 @@ void main() {
       final ks = SystemKeySource(service: 'dune/uuid', api: api);
       // Uses a real temp file for the container.
       final dir = Directory.systemTemp.createTempSync('ss_modelb_');
+      Process.runSync('chmod',
+          ['700', dir.path]); // private store dir (umask is 0755 on Linux)
       addTearDown(() => dir.deleteSync(recursive: true));
       final path = '${dir.path}/secrets.enc';
 
@@ -123,6 +125,8 @@ void main() {
       final api = FakeKeystoreApi()..locked = true;
       final ks = SystemKeySource(service: 's', api: api);
       final dir = Directory.systemTemp.createTempSync('ss_locked_');
+      Process.runSync('chmod',
+          ['700', dir.path]); // private store dir (umask is 0755 on Linux)
       addTearDown(() => dir.deleteSync(recursive: true));
       final be = EncryptedFileBackend(path: '${dir.path}/c.enc', keySource: ks);
       // Reading the key throws KeystoreLocked from the fake.

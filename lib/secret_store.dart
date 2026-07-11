@@ -27,8 +27,10 @@ export 'src/errors.dart'
         KeystoreLocked,
         KeystoreOperationFailed,
         KeystoreUnreachable,
+        MigrationRequired,
         SecretStoreException,
         StoreKeyMissing,
+        StoreTooLarge,
         UnsupportedCapability,
         WrongStoreKey;
 export 'src/secret_storage.dart' show SecretStorage;

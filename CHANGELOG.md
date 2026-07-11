@@ -4,6 +4,45 @@
 
 Initial implementation (see [doc/design.md](doc/design.md)). Not yet published.
 
+### Hardening from code review (pre-release)
+
+Correctness and honesty fixes from an external review; all now covered by
+tests (unit + the real-platform e2e matrix). The cryptographic core was
+unchanged — these are lifecycle/ownership and truthful-reporting fixes.
+
+- **`describe().level` is now measured, not asserted.** Added
+  `SecurityLevel.softwareBacked`. Android inspects the KEK's
+  `KeyInfo.getSecurityLevel()` and reports `hardwareBacked` only for
+  `TRUSTED_ENVIRONMENT`/`STRONGBOX` (emulators and software Keystores report
+  `softwareBacked`). Apple native items report `hardwareBacked` as the
+  platform-mechanism claim — the DP keychain has no per-item residency query
+  and the simulator/pre-T2-Intel exceptions aren't detectable from pure Dart
+  FFI, so they're documented with the silicon check pending an on-device run.
+  The level is now owned by the key source (where the key lives), not a backend
+  constant.
+- **macOS entitlement changes no longer switch stores silently.** A `.scheme`
+  marker records how a store was provisioned; if a later run resolves to a
+  different scheme (entitlement gained/lost), the resolver throws the new typed
+  **`MigrationRequired`** rather than showing an empty store or resurfacing
+  stale values.
+- **Oversized writes can't brick a store.** `write` now rejects a value whose
+  sealed container would exceed the read cap with the new typed
+  **`StoreTooLarge`**, *before* replacing the existing container (which stays
+  intact and readable).
+- **Same-store serialization is per container path**, not per backend object —
+  two `SecretStorage(appId:)` instances in one process no longer drop each
+  other's updates.
+- **The macOS DP probe can no longer touch a caller's item**: it uses a
+  dedicated internal service outside the public `appId` grammar and only
+  removes its own probe item.
+- **Linux fixes:** the `appId` reaches `secret-tool` after a `--` option
+  terminator (a leading-dash id can't be parsed as a flag); and a clean account
+  with no `~/.local/share` now has the XDG data hierarchy created `0700`
+  instead of failing the first write.
+- **Android filesystem errors are typed**: the POSIX shim resolves the errno
+  symbol across libcs (`__errno_location` on glibc/musl, `__errno` on bionic)
+  instead of a fixed guess.
+
 ### Android backend (pre-release)
 
 - **Android (12 / API 31+) now resolves to the encrypted file with its key

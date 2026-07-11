@@ -42,8 +42,12 @@ final class SecretToolApi implements KeystoreApi {
   /// prompt.
   final Duration timeout;
 
+  // A leading `--` terminates `secret-tool`'s option parsing, so an attribute
+  // value that begins with `-` (a `service` derived from an appId like
+  // `--unlock`) is treated as data, never as a command-line option. Every
+  // attribute list is prefixed with it.
   List<String> _attrs(String service, String account) =>
-      ['service', service, 'account', account];
+      ['--', 'service', service, 'account', account];
 
   Future<ProcessRunResult> _run(List<String> args, {String? stdin}) =>
       _runner.run(executable, args, stdin: stdin, timeout: timeout);
@@ -116,7 +120,8 @@ final class SecretToolApi implements KeystoreApi {
 
   @override
   Future<Map<String, Uint8List>> getAll(String service) async {
-    final r = await _run(['search', '--all', 'service', service]);
+    // `--` after the `--all` option, before the attribute pair (see _attrs).
+    final r = await _run(['search', '--all', '--', 'service', service]);
     if (r.launchFailed || r.timedOut) _translate(r, 'getAll');
     // `search` exits 1 when nothing matches.
     if (r.exitCode == 1) {

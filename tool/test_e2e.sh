@@ -63,7 +63,7 @@ boot_android_emu() {
   adb wait-for-device 2>/dev/null
   local waited=0
   until [[ "$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" == "1" ]]; do
-    sleep 3; waited=$((waited + 3)); [[ $waited -ge 240 ]] && return 1
+    sleep 3; waited=$((waited + 3)); [[ $waited -ge 420 ]] && return 1
   done
 }
 
@@ -113,7 +113,10 @@ leg_macos_cli() {
 }
 leg_linux() { cd "$REPO" && ./tool/test_linux.sh; }
 leg_macos_app() {
-  cd "$HARNESS" && flutter test integration_test/secret_store_test.dart -d macos
+  # Distinct APP_ID from the entitled leg — same machine, different scheme, so
+  # they must not share an app-support dir (the migration guard would fire).
+  cd "$HARNESS" && flutter test integration_test/secret_store_test.dart \
+    -d macos --dart-define=APP_ID=com.example.secretStoreHarness.file
 }
 leg_ios() {
   boot_ios_sim || return 1
@@ -129,7 +132,8 @@ leg_entitled() {
   apply_entitled_overlay || return 1
   local rc=0
   (cd "$HARNESS" && flutter test integration_test/secret_store_test.dart \
-    -d macos --dart-define=EXPECT_HARDWARE=true) || rc=1
+    -d macos --dart-define=EXPECT_HARDWARE=true \
+    --dart-define=APP_ID=com.example.secretStoreHarness.native) || rc=1
   restore_entitled_overlay
   return $rc
 }

@@ -17,6 +17,7 @@ library;
 import 'dart:math';
 import 'dart:typed_data';
 
+import 'backend.dart';
 import 'errors.dart';
 import 'ffi/keystore_api.dart';
 import 'ffi/posix_file.dart';
@@ -42,6 +43,7 @@ final class KeySourceStatus {
     required this.present,
     required this.available,
     this.locked = false,
+    this.securityLevel,
     this.detail,
   });
 
@@ -56,6 +58,11 @@ final class KeySourceStatus {
 
   /// Whether the mechanism is locked (keystore needs unlocking).
   final bool locked;
+
+  /// Offline-attack protection of where the key lives, as the key source
+  /// itself reports it — measured, not assumed (e.g. Android inspects
+  /// `KeyInfo`). Null when it can't be determined (e.g. no key exists yet).
+  final SecurityLevel? securityLevel;
 
   final String? detail;
 }
@@ -199,6 +206,8 @@ final class SystemKeySource implements KeySource {
       present: present,
       available: p.available,
       locked: p.locked,
+      // The OS keystore holds the key under a login-derived key.
+      securityLevel: SecurityLevel.loginBound,
       detail: p.detail,
     );
   }

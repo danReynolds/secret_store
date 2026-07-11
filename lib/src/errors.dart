@@ -127,3 +127,43 @@ final class UnsupportedCapability extends SecretStoreException {
       : super('unsupported_capability',
             'This backend does not support: $capability');
 }
+
+/// The store for this `appId` was provisioned under a **different scheme** than
+/// the one that now resolves, so silently using the current scheme would hide
+/// the existing secrets (an empty-looking store) or, worse, resurface stale
+/// values from an abandoned store. On macOS this happens when an app gains or
+/// loses the Keychain Sharing entitlement between versions (Data Protection
+/// keychain ⇄ encrypted file). Rather than switch stores silently, the library
+/// throws this so the transition is a deliberate decision. Resolve it by
+/// migrating the secrets and then clearing the marker
+/// (`~/Library/Application Support/<appId>/.scheme`), or by removing that
+/// directory to start fresh under the new scheme.
+final class MigrationRequired extends SecretStoreException {
+  MigrationRequired({required this.appId, required this.from, required this.to})
+      : super(
+            'migration_required',
+            'store for "$appId" was provisioned as "$from" but "$to" now '
+                'resolves; refusing to switch stores silently');
+
+  /// The app id whose store scheme changed.
+  final String appId;
+
+  /// The scheme the store was last provisioned under (`native` | `file`).
+  final String from;
+
+  /// The scheme that resolves now.
+  final String to;
+}
+
+/// A write was rejected because the whole sealed store would exceed the
+/// container size cap. Raised **before** the existing container is touched, so
+/// the prior contents remain intact and readable — an oversized value can
+/// never brick the store. Split large blobs, or store a reference instead of
+/// the payload.
+final class StoreTooLarge extends SecretStoreException {
+  StoreTooLarge(this.sealedBytes, this.maxBytes)
+      : super('store_too_large',
+            'sealed store is $sealedBytes bytes, over the $maxBytes-byte cap');
+  final int sealedBytes;
+  final int maxBytes;
+}

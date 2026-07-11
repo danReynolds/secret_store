@@ -44,6 +44,11 @@ best-case reliability profile and to fail loudly, never silently:
   (restore onto a different device, OS/OEM eviction, corruption), reads throw a
   typed **`KeyInvalidated`** instead of silently starting an empty store.
   Recovery is deleting the store's data directory and re-provisioning.
+- **Hardware backing is measured, not assumed.** `describe().level` reads the
+  KEK's `KeyInfo.getSecurityLevel()`: `hardwareBacked` only when the Keystore
+  reports `TRUSTED_ENVIRONMENT` or `STRONGBOX`, otherwise `softwareBacked`
+  (a software Keystore implementation, or an emulator). Presence of the
+  Keystore is never taken as proof of hardware.
 
 ## Exclude the store from backups
 

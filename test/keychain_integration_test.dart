@@ -89,7 +89,7 @@ void main() {
         'probeDataProtection reports missingEntitlement on an unentitled '
         'process (the resolver branch every CLI takes)', () {
       final dp = AppleKeychainApi.dataProtection();
-      expect(dp.probeDataProtection(service),
+      expect(dp.probeDataProtection(),
           DataProtectionAvailability.missingEntitlement);
     }, skip: skip);
 
@@ -152,6 +152,34 @@ void main() {
 
       await store.delete('token');
       expect(await store.readString('token'), isNull);
+    }, skip: skip);
+
+    test('a scheme change is refused with MigrationRequired', () async {
+      // Simulate a prior *entitled* provisioning by pre-seeding the marker
+      // with "native". This unentitled runner resolves to "file", so the
+      // resolver must refuse rather than silently use a different store.
+      dataDir.createSync(recursive: true);
+      Process.runSync('chmod', ['700', dataDir.path]);
+      final marker = File('${dataDir.path}/.scheme')
+        ..writeAsStringSync('native');
+      Process.runSync('chmod', ['600', marker.path]);
+
+      expect(
+        () => SecretStorage(appId: appId),
+        throwsA(isA<MigrationRequired>()
+            .having((e) => e.from, 'from', 'native')
+            .having((e) => e.to, 'to', 'file')),
+      );
+    }, skip: skip);
+
+    test('first provision writes a matching scheme marker (no false alarm)',
+        () async {
+      SecretStorage(appId: appId); // resolves to file, writes marker
+      final marker = File('${dataDir.path}/.scheme');
+      expect(marker.existsSync(), isTrue);
+      expect(marker.readAsStringSync().trim(), 'file');
+      // A second construction sees a matching marker and does not throw.
+      expect(() => SecretStorage(appId: appId), returnsNormally);
     }, skip: skip);
   });
 }

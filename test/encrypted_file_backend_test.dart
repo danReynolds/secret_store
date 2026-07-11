@@ -19,6 +19,12 @@ void main() {
 
   setUp(() {
     tmp = Directory.systemTemp.createTempSync('ss_efb_');
+    // createTempSync respects umask (0755 on Linux, 0700 on macOS's per-user
+    // /var/folders). A real store directory is private, and the backend
+    // enforces that — so the fixture must start private too, or every write
+    // is (correctly) rejected on Linux before its assertion. The
+    // permission-enforcement group below re-loosens perms on purpose.
+    Process.runSync('chmod', ['700', tmp.path]);
     containerPath = '${tmp.path}/secrets.enc';
     keyPath = '${tmp.path}/store.key';
   });
@@ -80,6 +86,35 @@ void main() {
       ]);
       expect((await be.readAll()).keys.toSet(),
           {for (var i = 0; i < 8; i++) 'k$i'});
+    });
+
+    test('two backends on the same path also serialize (per-path lock)',
+        () async {
+      // Two SecretStorage/backend objects for one store must share the lock or
+      // their interleaved read-modify-writes drop updates. Shared key source →
+      // same store key, so both read/write the same container.
+      final ks = InMemoryKeySource();
+      final be1 = backend(ks);
+      final be2 = backend(ks);
+      await Future.wait<void>([
+        for (var i = 0; i < 12; i++)
+          (i.isEven ? be1 : be2).write('k$i', b('$i')),
+      ]);
+      expect((await be1.readAll()).keys.toSet(),
+          {for (var i = 0; i < 12; i++) 'k$i'});
+    });
+  });
+
+  group('size cap', () {
+    test('an oversized value is rejected; the existing store stays intact',
+        () async {
+      final be = backend(InMemoryKeySource());
+      await be.write('keep', b('precious'));
+      final huge = Uint8List(maxContainerBytes + 1);
+      await expectLater(be.write('huge', huge), throwsA(isA<StoreTooLarge>()));
+      // The prior container was never replaced — all entries remain readable.
+      expect(await be.read('keep'), b('precious'));
+      expect(await be.read('huge'), isNull);
     });
   });
 

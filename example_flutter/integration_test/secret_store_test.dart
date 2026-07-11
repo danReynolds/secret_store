@@ -28,7 +28,12 @@ import 'package:secret_store/secret_store.dart';
 /// detected — detection is what the test is *checking*).
 const bool expectHardware = bool.fromEnvironment('EXPECT_HARDWARE');
 
-const appId = 'com.example.secretStoreHarness';
+/// The macOS entitled and unentitled legs run on the *same machine* and would
+/// otherwise share one app-support dir — where the entitled leg would trip the
+/// scheme-migration guard on the unentitled leg's marker. Each macOS leg passes
+/// a distinct APP_ID so they stay isolated; mobile legs use the default.
+const appId = String.fromEnvironment('APP_ID',
+    defaultValue: 'com.example.secretStoreHarness');
 
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
@@ -49,14 +54,18 @@ void main() {
     final info = await store.backend.describe();
     if (Platform.isAndroid) {
       // No config fork on Android: always the encrypted file with its key
-      // wrapped by an AndroidKeyStore hardware key.
+      // wrapped by an AndroidKeyStore key. The *level* is measured from the
+      // KEK, which doesn't exist until first write — asserted in the dedicated
+      // test below, not here.
       expect(info.name, 'encrypted-file',
           reason: 'Android must resolve to the file scheme');
-      expect(info.level, SecurityLevel.hardwareBacked,
-          reason: 'the store key is sealed in AndroidKeyStore (TEE/StrongBox)');
-    } else if (expectHardware) {
-      expect(info.name, 'keystore',
-          reason: 'entitled/iOS build must resolve to native DP items');
+    } else if (Platform.isIOS || expectHardware) {
+      // iOS, and entitled macOS: native DP items. The level is Apple's
+      // platform-mechanism claim (hardwareBacked on SE hardware); the
+      // simulator/pre-T2-Intel exceptions aren't runtime-detectable from pure
+      // Dart FFI (SIMULATOR_* is absent in the app process), so the silicon
+      // check stays a pending on-device step — see doc/platforms/ios.md.
+      expect(info.name, 'keystore', reason: 'must resolve to native DP items');
       expect(info.level, SecurityLevel.hardwareBacked);
     } else {
       expect(info.name, 'encrypted-file',
@@ -65,6 +74,23 @@ void main() {
     }
     expect(info.available, isTrue);
     expect(info.locked, isFalse);
+  });
+
+  test('Android: security level is measured from the KEK, not asserted',
+      () async {
+    if (!Platform.isAndroid) {
+      markTestSkipped('Android-only');
+      return;
+    }
+    // Provision the KEK, then read the level the hardware actually claims.
+    await store.writeString('__lvl', 'x');
+    final info = await store.backend.describe();
+    // An emulator's Keystore is software-emulated, so the honest measured
+    // level is `softwareBacked` — proving we report what KeyInfo says, not a
+    // blanket "hardwareBacked". A real device with TEE/StrongBox reports
+    // hardwareBacked.
+    expect(info.level, SecurityLevel.softwareBacked,
+        reason: 'emulator Keystore is software; measurement must say so');
   });
 
   test('full round-trip: bytes, strings, labels, enumeration, delete',

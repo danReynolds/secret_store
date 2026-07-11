@@ -13,10 +13,19 @@ import 'dart:typed_data';
 /// attack (a stolen disk or backup). Reported by [BackendInfo.level] so a
 /// consumer can verify — not guess — what protection is in effect.
 enum SecurityLevel {
-  /// The key (or the data itself) is sealed in secure hardware — Secure
-  /// Enclave, StrongBox/TEE, or a TPM. A stolen disk or backup is useless
-  /// offline: reading the store requires that specific device.
+  /// The key (or the data itself) is sealed in **verified** secure hardware —
+  /// Apple's Secure Enclave, or an Android Keystore key whose
+  /// `KeyInfo.getSecurityLevel()` reports `TRUSTED_ENVIRONMENT`/`STRONGBOX`. A
+  /// stolen disk or backup is useless offline: reading the store requires that
+  /// specific device.
   hardwareBacked,
+
+  /// The key is held by the platform keystore, but secure-hardware residency
+  /// was **not** established — e.g. an Android device whose Keystore falls back
+  /// to a software implementation, or an emulator. The key is still
+  /// OS-protected, but a stolen disk may be attackable offline; do not assume
+  /// hardware isolation.
+  softwareBacked,
 
   /// The key is protected by the OS login (login Keychain, Secret Service,
   /// DPAPI): safe from other local users; against a stolen disk, as strong as

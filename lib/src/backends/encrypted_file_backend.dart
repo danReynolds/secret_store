@@ -4,15 +4,17 @@
 /// Implements the §7 failure matrix precisely, so a diagnostics UI can tell a
 /// fresh install from a lost container, a lost key, a wrong key, or tampering.
 ///
-/// **Concurrency.** Operations on one backend instance are serialized by an
-/// in-process FIFO mutex, so concurrent calls within a process never interleave
-/// their whole-file read-modify-write (which would drop updates). Coordination
-/// *across processes* is out of scope: a container has a **single writer**.
-/// Two processes writing the same container concurrently can lose an update or,
-/// on first write, both create a store key and leave the container sealed under
-/// a discarded one — bring your own lock, or don't share a container between
-/// writers. (An advisory `flock` was prototyped and cut as surface the common
-/// single-writer deployment doesn't need.)
+/// **Concurrency.** Whole-file read-modify-write operations are serialized by
+/// an in-process FIFO mutex keyed on the **container path**, so concurrent
+/// calls — even from two separate backend instances (e.g. two
+/// `SecretStorage(appId:)` objects) targeting the same store — never interleave
+/// and drop updates. Coordination *across processes* is out of scope: a
+/// container has a **single writer**. Two processes writing the same container
+/// concurrently can lose an update or, on first write, both create a store key
+/// and leave the container sealed under a discarded one — bring your own lock,
+/// or don't share a container between writers. (An advisory `flock` was
+/// prototyped and cut as surface the common single-writer deployment doesn't
+/// need.)
 library;
 
 import 'dart:async';
@@ -35,7 +37,6 @@ final class EncryptedFileBackend implements SecretBackend {
     required KeySource keySource,
     List<int> contextSalt = const [],
     SecureFileSystem fs = const SecureFileSystem(),
-    this.level = SecurityLevel.loginBound,
   })  : _keySource = keySource,
         _fs = fs,
         _container = Container(contextSalt: contextSalt);
@@ -43,15 +44,16 @@ final class EncryptedFileBackend implements SecretBackend {
   /// Path to the container file. Its parent directory is ensured `0700`.
   final String path;
 
-  /// Offline-protection level of the composed scheme, set by the resolver
-  /// from the key's home (OS keystore → [SecurityLevel.loginBound]; TPM →
-  /// [SecurityLevel.hardwareBacked]).
-  final SecurityLevel level;
-
   final KeySource _keySource;
   final SecureFileSystem _fs;
   final Container _container;
-  final _TurnLock _mutex = _TurnLock();
+
+  /// Serialization is keyed by container path and shared across instances: two
+  /// backends for the same store must take the same lock or they can drop each
+  /// other's whole-file updates. (Process-lifetime; one small entry per
+  /// distinct store path.)
+  static final Map<String, _TurnLock> _locks = {};
+  _TurnLock get _mutex => _locks.putIfAbsent(path, _TurnLock.new);
 
   @override
   BackendCapabilities get capabilities =>
@@ -106,6 +108,12 @@ final class EncryptedFileBackend implements SecretBackend {
     key ??= await _keySource.create();
     try {
       final sealed = await _container.seal(entries, key);
+      // Reject before the atomic replace: the read side caps the container at
+      // maxContainerBytes, so a larger file would make *every* subsequent read
+      // fail closed. Checking here leaves the existing container untouched.
+      if (sealed.length > maxContainerBytes) {
+        throw StoreTooLarge(sealed.length, maxContainerBytes);
+      }
       _fs.writeAtomicSync(path, sealed);
     } catch (_) {
       if (createdFreshKey) {
@@ -165,7 +173,9 @@ final class EncryptedFileBackend implements SecretBackend {
       available: keyStatus.available,
       locked: keyStatus.locked,
       capabilities: capabilities,
-      level: level,
+      // The level is whatever the key's home actually reports (measured, e.g.
+      // Android inspects KeyInfo) — not a value the backend assumes.
+      level: keyStatus.securityLevel,
       detail: 'container=${containerPresent ? 'present' : 'absent'} '
           'key=${keyStatus.present ? 'present' : 'absent'} '
           'via ${keyStatus.name}',

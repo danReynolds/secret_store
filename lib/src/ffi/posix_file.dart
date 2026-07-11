@@ -53,10 +53,28 @@ final int Function(Pointer<Utf8>, int) _mkdir = _libc.lookupFunction<
     Int32 Function(Pointer<Utf8>, Uint32),
     int Function(Pointer<Utf8>, int)>('mkdir');
 
-// errno location: __error() on macOS/BSD, __errno_location() on Linux/glibc.
-final Pointer<Int32> Function() _errnoLocation =
-    _libc.lookupFunction<Pointer<Int32> Function(), Pointer<Int32> Function()>(
-        Platform.isMacOS ? '__error' : '__errno_location');
+// errno location differs by libc: __error() on macOS/BSD, __errno_location()
+// on glibc/musl, __errno() on Android bionic. Resolve by trying the platform's
+// candidates in order — a fixed guess would turn every filesystem error on the
+// odd-one-out (e.g. Android, now that the file backend runs there) into an
+// untyped symbol-lookup failure instead of a typed SecureFileError.
+final Pointer<Int32> Function() _errnoLocation = _resolveErrnoLocation();
+
+Pointer<Int32> Function() _resolveErrnoLocation() {
+  final candidates = Platform.isMacOS
+      ? const ['__error']
+      : const ['__errno_location', '__errno']; // glibc/musl, then bionic
+  for (final symbol in candidates) {
+    try {
+      return _libc.lookupFunction<Pointer<Int32> Function(),
+          Pointer<Int32> Function()>(symbol);
+    } on ArgumentError {
+      // not this libc's spelling — try the next
+    }
+  }
+  throw UnsupportedError(
+      'no errno-location symbol (${candidates.join('/')}) found in libc');
+}
 
 int get _errno => _errnoLocation().value;
 
@@ -206,40 +224,47 @@ class SecureFileSystem {
   }
 
   /// Ensures [dirPath] exists as a directory that grants no group/other access
-  /// (`mode & 0o077 == 0`). Creates it `0700` via `mkdir(2)` if absent (unlike
-  /// `Directory.createSync`, which respects umask and can yield 0755), then
-  /// verifies — so a *pre-existing* world/group-accessible dir is rejected, not
-  /// silently trusted. The dir's privacy is the property the file backend's
-  /// security rests on, so it is enforced, not assumed.
+  /// (`mode & 0o077 == 0`). Creates it — and any missing ancestors — `0700` via
+  /// `mkdir(2)` (unlike `Directory.createSync`, which respects umask and can
+  /// yield 0755), then verifies the leaf — so a *pre-existing* world/group-
+  /// accessible leaf is rejected, not silently trusted. The dir's privacy is
+  /// the property the file backend's security rests on, so it is enforced, not
+  /// assumed.
   ///
   /// Note (v1): the strict "owned by the current euid" check is deferred — it
   /// needs per-platform `struct stat` offsets. A 0700 directory owned by
   /// another user is unusable to us anyway (operations fail with EACCES), so
   /// the mode check carries the load. Tracked as a hardening follow-up.
   void ensurePrivateDirSync(String dirPath) {
-    final dir = Directory(dirPath);
-    if (!dir.existsSync()) {
-      final parent = dir.parent;
-      if (!parent.existsSync()) {
-        // Only create the leaf privately; a missing parent is the caller's
-        // responsibility (we won't create intermediate dirs with unknown modes).
-        throw SecureFileError('parent-missing', dirPath, 0);
-      }
-      final ptr = dirPath.toNativeUtf8();
-      try {
-        if (_mkdir(ptr, 0x1C0 /* 0700 */) < 0) {
-          final e = _errno;
-          if (e != 17 /* EEXIST: lost a race, fall through to verify */) {
-            throw SecureFileError('mkdir', dirPath, e);
-          }
-        }
-      } finally {
-        malloc.free(ptr);
-      }
-    }
+    // Create the leaf and any missing ancestors, each 0700. A clean home may
+    // lack `~/.local/share` (or a freshly-pointed `XDG_DATA_HOME`) entirely,
+    // and the XDG spec says to create a missing data directory with mode 0700 —
+    // so we do, with a *known* mode rather than refusing. Recursion stops at
+    // the first existing ancestor (HOME at worst, which the resolver
+    // guarantees), so we never walk above the intended base.
+    _ensureDirChainSync(dirPath);
     if (!verifyPrivateDirSync(dirPath)) {
-      // mkdir succeeded or EEXIST'd, so absence here means it vanished under us.
+      // We just created it (or it pre-existed private), so absence/looseness
+      // here means it vanished or was tampered under us.
       throw SecureFileError('dir-vanished', dirPath, 0);
+    }
+  }
+
+  void _ensureDirChainSync(String dirPath) {
+    final dir = Directory(dirPath);
+    if (dir.existsSync()) return;
+    final parent = dir.parent;
+    if (parent.path != dirPath) _ensureDirChainSync(parent.path);
+    final ptr = dirPath.toNativeUtf8();
+    try {
+      if (_mkdir(ptr, 0x1C0 /* 0700 */) < 0) {
+        final e = _errno;
+        if (e != 17 /* EEXIST: lost a race, fine */) {
+          throw SecureFileError('mkdir', dirPath, e);
+        }
+      }
+    } finally {
+      malloc.free(ptr);
     }
   }
 

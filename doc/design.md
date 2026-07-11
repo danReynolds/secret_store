@@ -675,6 +675,36 @@ Non-obvious things the build settled:
   the implementation in git history. Headless boxes fail closed with typed
   guidance. Re-adding is a contained change on the same `KeySource` seam
   Android now ships on.
+- **Review hardening (2026-07-11).** An external review found lifecycle and
+  reporting defects (the crypto core held up); fixes, each now tested:
+  - *Truthful security level.* `describe().level` is **measured**, not assumed.
+    Added `SecurityLevel.softwareBacked`; the level moved onto the `KeySource`
+    (it knows where the key lives). Android reads `KeyInfo.getSecurityLevel()`
+    → `hardwareBacked` only for TEE/StrongBox, else `softwareBacked`. Apple
+    **native items** keep `hardwareBacked` on the platform-mechanism basis
+    (SE-gated on every shipping SE device); the DP keychain has no per-item
+    residency query, and the non-SE contexts (iOS Simulator, pre-T2 Intel Mac)
+    are **not** reliably detectable from pure Dart FFI — the `SIMULATOR_*`
+    vars are absent in the app process (verified on the sim: an attempt to
+    special-case the simulator via `SIMULATOR_UDID` failed). So those are
+    documented and the silicon check is a pending on-device step, not a silent
+    over-claim.
+  - *No silent store migration on macOS.* A `.scheme` marker records the
+    provisioning scheme; a mismatch on a later resolve (entitlement gained or
+    lost) throws typed `MigrationRequired` instead of showing an empty store or
+    resurrecting stale values. This is the one place the "deterministic per
+    binary, re-provision is fine" stance was too weak — the marker makes the
+    transition explicit and fail-closed.
+  - *No bricking, no lost updates.* `write` rejects an oversized sealed
+    container (`StoreTooLarge`) **before** replacing the prior one; the
+    read-modify-write mutex is keyed by container **path** so two backend
+    instances for one store serialize.
+  - *Smaller blast radius on the edges.* The DP probe uses a dedicated internal
+    service (outside the `appId` grammar) and deletes only its own item;
+    `secret-tool` gets a `--` terminator so a dash-leading `appId` is data not
+    a flag; the XDG data hierarchy is created `0700` on a clean account; the
+    POSIX errno symbol is resolved across libcs (glibc/musl `__errno_location`,
+    bionic `__errno`).
 - Crypto dependency: stay exact-pinned on `cryptography 2.9.0` (2026-07 review:
   latest release; our two primitives are its healthiest code; every known vuln
   is in unused AES paths), construct the `Dart*` implementations directly, CI

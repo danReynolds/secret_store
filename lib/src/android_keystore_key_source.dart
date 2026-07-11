@@ -21,6 +21,7 @@ library;
 import 'dart:ffi';
 import 'dart:typed_data';
 
+import 'backend.dart';
 import 'errors.dart';
 import 'ffi/jni.dart';
 import 'ffi/posix_file.dart';
@@ -238,8 +239,9 @@ final class AndroidKeystoreKeySource implements KeySource {
   @override
   Future<KeySourceStatus> describe() async {
     final present = _fs.existsSync(blobPath);
+    final Jni jni;
     try {
-      Jni.instance();
+      jni = Jni.instance();
     } on SecretStoreException catch (e) {
       return KeySourceStatus(
           name: 'android-keystore',
@@ -247,11 +249,56 @@ final class AndroidKeystoreKeySource implements KeySource {
           available: false,
           detail: e.message);
     }
+    // Report the level the hardware actually claims — measured from the KEK's
+    // KeyInfo, never assumed from "Keystore is present". Null until a key
+    // exists to measure.
+    final level = jni.withFrame(_measureSecurityLevel);
     return KeySourceStatus(
         name: 'android-keystore',
         present: present,
         available: true,
-        detail: 'AndroidKeyStore AES-256-GCM key-encryption key');
+        securityLevel: level,
+        detail: level == null
+            ? 'AndroidKeyStore (no key yet)'
+            : 'AndroidKeyStore AES-256-GCM KEK — ${level.name}');
+  }
+
+  /// The KEK's security level per `KeyInfo.getSecurityLevel()` (API 31+):
+  /// `TRUSTED_ENVIRONMENT`/`STRONGBOX` → [SecurityLevel.hardwareBacked], else
+  /// [SecurityLevel.softwareBacked]. Null when no key exists yet or the query
+  /// isn't answerable (diagnostics must never throw).
+  SecurityLevel? _measureSecurityLevel(JniFrame f) {
+    try {
+      final ks = _loadKeystore(f);
+      final kek = _getKek(f, ks);
+      if (kek == nullptr) return null;
+      final keyCls = f.findClass('java/security/Key');
+      final getAlgorithm =
+          f.methodId(keyCls, 'getAlgorithm', '()Ljava/lang/String;');
+      final algo =
+          f.callObjectA(kek, getAlgorithm, const [], 'Key.getAlgorithm');
+      final skfCls = f.findClass('javax/crypto/SecretKeyFactory');
+      final getInstance = f.staticMethodId(skfCls, 'getInstance',
+          '(Ljava/lang/String;Ljava/lang/String;)Ljavax/crypto/SecretKeyFactory;');
+      final skf = f.callStaticObjectA(skfCls, getInstance,
+          [algo, f.str('AndroidKeyStore')], 'SecretKeyFactory.getInstance');
+      // A jclass is a java.lang.Class object, usable directly as the argument.
+      final keyInfoCls = f.findClass('android/security/keystore/KeyInfo');
+      final getKeySpec = f.methodId(skfCls, 'getKeySpec',
+          '(Ljavax/crypto/SecretKey;Ljava/lang/Class;)Ljava/security/spec/KeySpec;');
+      final keyInfo = f.callObjectA(
+          skf, getKeySpec, [kek, keyInfoCls], 'SecretKeyFactory.getKeySpec');
+      final getSecurityLevel =
+          f.methodId(keyInfoCls, 'getSecurityLevel', '()I');
+      final n = f.callIntA(
+          keyInfo, getSecurityLevel, const [], 'KeyInfo.getSecurityLevel');
+      // KeyProperties: 1 = TRUSTED_ENVIRONMENT, 2 = STRONGBOX.
+      return (n == 1 || n == 2)
+          ? SecurityLevel.hardwareBacked
+          : SecurityLevel.softwareBacked;
+    } on JavaThrown {
+      return null; // never let a diagnostics query throw
+    }
   }
 
   // --- Keystore choreography (each helper runs inside a caller's frame) ---

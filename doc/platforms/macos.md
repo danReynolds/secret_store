@@ -16,9 +16,20 @@ keychain** and reads the result:
   loudly, never quietly downgraded.
 
 Entitlements are baked into the code signature, so the outcome is fixed per
-binary and cached for the process. (The full rationale — why a probe rather
-than reading the entitlement, and why this is *not* the unsafe kind of
+binary and cached for the process. The probe writes to a **dedicated internal
+service** (outside the `appId` grammar), so it can never collide with — or
+delete — one of your secrets. (The full rationale — why a probe rather than
+reading the entitlement, and why this is *not* the unsafe kind of
 auto-detection — is in [design.md](../design.md).)
+
+**Changing the entitlement between versions moves the store.** Gaining or
+losing Keychain Sharing switches which scheme resolves, so the two stores are
+physically different places. The library records the provisioning scheme in a
+`.scheme` marker and, rather than silently show an empty store (or resurface
+stale values from the abandoned one), throws a typed `MigrationRequired` on the
+mismatch. Migrate your secrets across, then remove
+`~/Library/Application Support/<appId>/.scheme` (or the whole directory) to
+proceed under the new scheme.
 
 ## Signed apps (entitled)
 
@@ -30,6 +41,13 @@ non-synchronizable, so they never escrow to iCloud.
 **What this resists.** The key material is sealed in secure hardware and bound
 to the device: a stolen disk, laptop, or backup is useless offline — an
 attacker needs that exact machine, unlocked.
+
+`describe().level` reports `hardwareBacked` on the SE-equipped hardware where
+this path runs (Apple-silicon and T2 Macs). The one context that lacks a Secure
+Enclave — an entitled app on a **pre-T2 Intel Mac**, where the Data Protection
+keychain falls back to software — is not runtime-detectable from pure Dart FFI;
+treat `hardwareBacked` as the platform-mechanism claim, sound on all current
+Apple hardware.
 
 **Validation.** The refusal path (−34018 → the file scheme, with nothing
 written as a fallback) is CI-tested on every push. The success path needs a

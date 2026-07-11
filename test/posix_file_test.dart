@@ -71,6 +71,16 @@ void main() {
         () => fs.ensurePrivateDirSync(d.path), throwsA(isA<SecureFileError>()));
   });
 
+  test('ensurePrivateDirSync creates missing ancestors, each 0700', () {
+    // The clean-account case: none of these exist yet (cf. ~/.local/share/<app>).
+    final leaf = '${tmp.path}/a/b/c';
+    fs.ensurePrivateDirSync(leaf);
+    for (final d in ['${tmp.path}/a', '${tmp.path}/a/b', leaf]) {
+      expect(mode(d), 0x1C0,
+          reason: '0700 expected for $d, got ${mode(d).toRadixString(8)}');
+    }
+  });
+
   test('delete is idempotent', () {
     final p = '${tmp.path}/gone.bin';
     fs.deleteSync(p); // no throw on missing

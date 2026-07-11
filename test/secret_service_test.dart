@@ -74,8 +74,10 @@ void main() {
     final api = SecretToolApi(runner: runner);
     await api.set('svc', 'acct', b([1, 2, 3, 250]), label: 'My Label');
 
-    expect(args,
-        ['store', '--label', 'My Label', 'service', 'svc', 'account', 'acct']);
+    expect(args, [
+      'store', '--label', 'My Label', //
+      '--', 'service', 'svc', 'account', 'acct'
+    ]);
     expect(runner.stdins.single, base64.encode([1, 2, 3, 250]));
     // The raw value bytes must never appear in argv.
     expect(args.join(' '), isNot(contains(String.fromCharCodes([250]))));
@@ -102,15 +104,28 @@ void main() {
     expect(await missing.get('s', 'a'), isNull);
   });
 
-  test('lookup/clear build the right args', () async {
+  test('lookup/clear build the right args (with the -- option terminator)',
+      () async {
     final getRunner = ScriptedRunner((a, s) => exit(1));
     await SecretToolApi(runner: getRunner).get('svc', 'k');
-    expect(
-        getRunner.calls.single, ['lookup', 'service', 'svc', 'account', 'k']);
+    expect(getRunner.calls.single,
+        ['lookup', '--', 'service', 'svc', 'account', 'k']);
 
     final delRunner = ScriptedRunner((a, s) => ok(''));
     await SecretToolApi(runner: delRunner).delete('svc', 'k');
-    expect(delRunner.calls.single, ['clear', 'service', 'svc', 'account', 'k']);
+    expect(delRunner.calls.single,
+        ['clear', '--', 'service', 'svc', 'account', 'k']);
+  });
+
+  test('a leading-dash service is data after --, never an option', () async {
+    // Regression: an appId like `--unlock` reaches secret-tool as the `service`
+    // attribute value; the `--` terminator keeps it from parsing as an option.
+    final runner = ScriptedRunner((a, s) => exit(1));
+    await SecretToolApi(runner: runner).get('--unlock', 'k');
+    final call = runner.calls.single;
+    expect(call.indexOf('--') < call.indexOf('--unlock'), isTrue,
+        reason: 'the terminator must precede the dash-leading value');
+    expect(call, ['lookup', '--', 'service', '--unlock', 'account', 'k']);
   });
 
   test('delete is idempotent: clear exits 1 on a missing item (not an error)',

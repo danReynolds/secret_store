@@ -53,6 +53,7 @@ const int _envIsInstanceOf = 32;
 const int _envGetMethodId = 33;
 const int _envCallObjectMethodA = 36;
 const int _envCallBooleanMethodA = 39;
+const int _envCallIntMethodA = 51;
 const int _envCallVoidMethodA = 63;
 const int _envGetStaticMethodId = 113;
 const int _envCallStaticObjectMethodA = 116;
@@ -105,6 +106,8 @@ typedef _CallObjAC = _PFn Function(Pointer<Void>, _PFn, _PFn, Pointer<Uint64>);
 typedef _CallBoolAC = Uint8 Function(
     Pointer<Void>, _PFn, _PFn, Pointer<Uint64>);
 typedef _CallBoolAD = int Function(Pointer<Void>, _PFn, _PFn, Pointer<Uint64>);
+typedef _CallIntAC = Int32 Function(Pointer<Void>, _PFn, _PFn, Pointer<Uint64>);
+typedef _CallIntAD = int Function(Pointer<Void>, _PFn, _PFn, Pointer<Uint64>);
 typedef _CallVoidAC = Void Function(Pointer<Void>, _PFn, _PFn, Pointer<Uint64>);
 typedef _CallVoidAD = void Function(Pointer<Void>, _PFn, _PFn, Pointer<Uint64>);
 typedef _NewStringUtfC = _PFn Function(Pointer<Void>, Pointer<Utf8>);
@@ -301,6 +304,9 @@ final class JniFrame {
     _callBooleanA = fns[_envCallBooleanMethodA]
         .cast<NativeFunction<_CallBoolAC>>()
         .asFunction<_CallBoolAD>();
+    _callIntA = fns[_envCallIntMethodA]
+        .cast<NativeFunction<_CallIntAC>>()
+        .asFunction<_CallIntAD>();
     _callVoidA = fns[_envCallVoidMethodA]
         .cast<NativeFunction<_CallVoidAC>>()
         .asFunction<_CallVoidAD>();
@@ -350,6 +356,7 @@ final class JniFrame {
   late final _CallObjAC _callObjectA;
   late final _CallObjAC _callStaticObjectA;
   late final _CallBoolAD _callBooleanA;
+  late final _CallIntAD _callIntA;
   late final _CallVoidAD _callVoidA;
   late final _NewStringUtfC _newStringUtf;
   late final _GetStringUtfCharsC _getStringUtfChars;
@@ -499,6 +506,13 @@ final class JniFrame {
     final r = _callBooleanA(_env, recv, mid, _jvalues(args));
     _check(op);
     return r != 0;
+  }
+
+  int callIntA(
+      Pointer<Void> recv, Pointer<Void> mid, List<Object?> args, String op) {
+    final r = _callIntA(_env, recv, mid, _jvalues(args));
+    _check(op);
+    return r;
   }
 
   void callVoidA(

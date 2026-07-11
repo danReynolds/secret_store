@@ -55,6 +55,12 @@ const int _kCFStringEncodingUTF8 = 0x08000100;
 typedef _CFTypeRef = Pointer<Void>;
 final _CFTypeRef _nullRef = nullptr;
 
+/// The probe's own service + account. The service contains a space, which the
+/// public `appId` grammar (`[A-Za-z0-9._-]`) can't produce, so the probe item
+/// can never collide with — and then delete — a real caller's secret.
+const String _dpProbeService = 'secret_store dp-probe';
+const String _dpProbeAccount = 'dp-probe';
+
 /// Whether this process can use the Data Protection keychain. Returned by
 /// [AppleKeychainApi.probeDataProtection]; the resolver picks the storage
 /// scheme from it (macOS only — iOS needs no probe).
@@ -547,8 +553,10 @@ final class AppleKeychainApi implements KeystoreApi {
   }
 
   /// Probes whether this process can write to the Data Protection keychain,
-  /// by an add+delete of a tiny probe item under [service]. Only meaningful on
-  /// a [AppleKeychainApi.dataProtection] instance.
+  /// by an add+delete of a tiny probe item under a **dedicated internal
+  /// service** ([_dpProbeService]) — never a caller's `appId` — so the probe
+  /// can never collide with or delete a real secret. Only meaningful on a
+  /// [AppleKeychainApi.dataProtection] instance.
   ///
   /// The raw OSStatus is inspected directly — not the [_fail] mapping — because
   /// the resolver must distinguish precisely: −34018 (missing entitlement) is
@@ -556,11 +564,11 @@ final class AppleKeychainApi implements KeystoreApi {
   /// any other failure is **thrown** typed and loud, so an entitled app with a
   /// broken keychain setup hears about it instead of being silently downgraded
   /// to weaker storage.
-  DataProtectionAvailability probeDataProtection(String service) {
+  DataProtectionAvailability probeDataProtection() {
     final refs = <Pointer<Void>>[];
     try {
-      final svc = _cfString(service)..let(refs.add);
-      final acct = _cfString('__secret_store_dp_probe__')..let(refs.add);
+      final svc = _cfString(_dpProbeService)..let(refs.add);
+      final acct = _cfString(_dpProbeAccount)..let(refs.add);
       final data = _cfData(Uint8List.fromList(const [0]))..let(refs.add);
       final add = _dict([
         (_kSecClass, _kSecClassGenericPassword),
@@ -577,13 +585,15 @@ final class AppleKeychainApi implements KeystoreApi {
       if (status == _errSecMissingEntitlement) {
         return DataProtectionAvailability.missingEntitlement;
       }
-      // A leftover probe item from a crashed earlier run reads as duplicate —
-      // the write was accepted, which is what the probe asks.
+      // Duplicate = a leftover probe from a crashed earlier run under our own
+      // dedicated service — the write is accepted, which is what the probe
+      // asks. Any other nonzero status is a genuine misconfiguration.
       if (status != _errSecSuccess && status != _errSecDuplicateItem) {
         _fail(status, 'dataProtection probe');
       }
-      // Remove the probe item (best effort — a leftover 1-byte probe is inert
-      // and is treated as `available` by the duplicate branch above).
+      // Remove the probe item. Safe unconditionally: the dedicated service is
+      // unreachable by the public appId grammar, so nothing here is ever a
+      // caller's secret.
       final del = _dict([
         (_kSecClass, _kSecClassGenericPassword),
         (_kSecAttrService, svc),

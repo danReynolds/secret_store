@@ -43,10 +43,9 @@ jobs:
       # Real Secret Service round-trip: a throwaway D-Bus session with a fresh
       # gnome-keyring unlocked by a known password (secrets component only).
       # Recipe verified locally against real gnome-keyring in a Docker container.
-      # (~/.local/share exists on any real desktop session; ensure it for the
-      # resolver end-to-end test — the library won't create intermediate dirs.)
+      # ~/.local/share is intentionally NOT pre-created — the resolver e2e test
+      # exercises the clean-account path where the library creates it (0700).
       - run: |
-          mkdir -p "$HOME/.local/share"
           dbus-run-session -- bash -c '
             eval "$(printf itest | gnome-keyring-daemon --daemonize --unlock --components=secrets)"
             export GNOME_KEYRING_CONTROL

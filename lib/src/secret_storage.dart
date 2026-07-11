@@ -19,6 +19,7 @@ import 'errors.dart';
 import 'ffi/jni.dart';
 import 'ffi/keychain.dart';
 import 'ffi/keystore_api.dart';
+import 'ffi/posix_file.dart';
 import 'ffi/secret_service.dart';
 import 'identifiers.dart';
 import 'key_source.dart';
@@ -128,6 +129,19 @@ final class SecretStorage {
 /// avoids re-probing per store.
 DataProtectionAvailability? _dpAvailabilityCache;
 
+/// The level to report for Apple native (Data Protection keychain) items.
+/// Their protection is Secure-Enclave-gated on all shipping SE hardware —
+/// every current iOS device, and Apple-silicon/T2 Macs — so [hardwareBacked]
+/// is the accurate platform-mechanism claim. Unlike Android's Keystore
+/// (`KeyInfo`), the DP keychain exposes no per-item hardware-residency query,
+/// and the two non-SE contexts (the iOS Simulator; an entitled app on a
+/// pre-T2 Intel Mac) are not reliably detectable from pure Dart FFI — the
+/// `SIMULATOR_*` vars are absent in the app process. So this reports the
+/// mechanism claim, and the non-measurable exceptions are documented
+/// (doc/platforms/ios.md, macos.md) with the on-device hardware check called
+/// out as pending.
+SecurityLevel _appleNativeLevel() => SecurityLevel.hardwareBacked;
+
 /// Resolves the per-platform scheme (doc/implementation-plan.md §2).
 SecretBackend _resolveBackend(String appId) {
   if (Platform.isIOS) {
@@ -137,19 +151,23 @@ SecretBackend _resolveBackend(String appId) {
     return KeystoreBackend(
       service: appId,
       api: AppleKeychainApi.dataProtection(),
-      level: SecurityLevel.hardwareBacked,
+      level: _appleNativeLevel(),
     );
   }
   if (Platform.isMacOS) {
     final dp = AppleKeychainApi.dataProtection();
-    final availability = _dpAvailabilityCache ??= dp.probeDataProtection(appId);
+    final availability = _dpAvailabilityCache ??= dp.probeDataProtection();
+    final native = availability == DataProtectionAvailability.available;
+    // Refuse to silently switch physical stores if the entitlement changed
+    // between versions (empty-looking store, or stale-value rollback).
+    _guardMacOSScheme(appId, native ? 'native' : 'file');
     switch (availability) {
       case DataProtectionAvailability.available:
         // Entitled app: native items in the DP keychain (Secure Enclave).
         return KeystoreBackend(
           service: appId,
           api: dp,
-          level: SecurityLevel.hardwareBacked,
+          level: _appleNativeLevel(),
         );
       case DataProtectionAvailability.missingEntitlement:
         // The normal CLI / `dart run` path: encrypted file, key in the login
@@ -174,7 +192,6 @@ SecretBackend _resolveBackend(String appId) {
         alias: '$appId.store-key',
         blobPath: '$dir/$wrappedKeyFileName',
       ),
-      level: SecurityLevel.hardwareBacked,
     );
   }
   throw KeystoreUnreachable(
@@ -184,12 +201,36 @@ SecretBackend _resolveBackend(String appId) {
       'doc/headless-implementation-plan.md)');
 }
 
-/// The shared file scheme: one authenticated container, key in the OS
-/// keystore. `level` stays [SecurityLevel.loginBound] — correct for a key held
-/// by a login-derived keystore.
+/// The shared file scheme: one authenticated container, key in the OS keystore
+/// ([SystemKeySource] reports [SecurityLevel.loginBound]).
 SecretBackend _encryptedFileScheme(String appId, KeystoreApi api) {
   return EncryptedFileBackend(
     path: containerPathFor(appId),
     keySource: SystemKeySource(service: appId, api: api),
   );
+}
+
+/// macOS-only migration guard. A marker file records which scheme
+/// (`native` | `file`) provisioned this appId's store. If the entitlement
+/// changed between versions the resolved scheme differs from the marker, and
+/// silently using the new store would hide the old secrets (empty-looking
+/// store) or resurface stale values — so throw [MigrationRequired] instead.
+/// First provision writes the marker (creating the app-support dir `0700`;
+/// for the native scheme this is its only on-disk footprint).
+void _guardMacOSScheme(String appId, String intended) {
+  const fs = SecureFileSystem();
+  final container = containerPathFor(appId);
+  final dir = container.substring(0, container.lastIndexOf('/'));
+  final markerPath = '$dir/.scheme';
+  final existingBytes =
+      fs.readCappedSync(markerPath, maxBytes: 32, requirePrivate: true);
+  if (existingBytes != null) {
+    final existing = utf8.decode(existingBytes).trim();
+    if (existing != intended) {
+      throw MigrationRequired(appId: appId, from: existing, to: intended);
+    }
+    return;
+  }
+  fs.ensurePrivateDirSync(dir);
+  fs.writeAtomicSync(markerPath, Uint8List.fromList(utf8.encode(intended)));
 }

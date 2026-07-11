@@ -18,11 +18,9 @@ cp -r /src /build && cd /build
 dart pub get >/dev/null
 
 # Secret Service via secret-tool, under a throwaway D-Bus session + keyring.
-# ~/.local/share exists on any real desktop session (the only place a keyring
-# is unlocked); a bare container lacks it, so create the fixture the desktop
-# guarantees — the library itself deliberately refuses to create intermediate
-# parent dirs with unknown modes.
-mkdir -p "$HOME/.local/share"
+# NB: we deliberately do NOT pre-create ~/.local/share — a bare container lacks
+# it, so this exercises the clean-account path where the library creates the
+# missing XDG data hierarchy itself (0700).
 dbus-run-session -- bash -c '
   eval "$(printf itest | gnome-keyring-daemon --daemonize --unlock --components=secrets)"
   export GNOME_KEYRING_CONTROL
