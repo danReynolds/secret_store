@@ -6,12 +6,18 @@ implementation context, so the build starts from conclusions rather than
 re-deriving them. Once code exists, the usual rule applies: where this file
 and the code disagree, the code wins and this file gets corrected.*
 
-*Naming is **settled** (2026-07-12): the product and executable are
-**`keyway`**, the CLI package is **`keyway_cli`**, and the library —
-formerly `secret_store`, never published under that name — is renamed
-**`keyway`**. The full decision record, availability research, and
-registration checklist are in Appendix B. Every constant that freezes with
-the name is in §16.*
+*Naming is settled (2026-07-12): the product and executable are **`keyway`**,
+the CLI package is **`keyway_cli`**, and the library — formerly
+`secret_store`, never published under that name — is renamed **`keyway`**.
+The naming record is Appendix B; constants that froze with the name are §16.*
+
+*v1 scope is settled (2026-07-12) after a two-round independent RFC review:
+**five commands, reference-only manifests** — the latter explicitly ratified
+by the owner as a product decision, not a parser simplification. The
+review's governing insight is recorded here because it should govern future
+scope debates too: **omission is reversible; premature surface area is
+not.** Cut features are recorded in §20 and Appendix C with their
+reasoning — as evidence-gated ideas, not as a roadmap.*
 
 Governing rules, inherited from [implementation-plan.md](implementation-plan.md)
 and extended: **one clear way to do things**; **the library stays the security
@@ -22,13 +28,22 @@ the CLI must be auditable to the same standard as the core.
 
 ## 0. Product statement
 
-A secure, local replacement for plaintext `.env` files — for any application
-in any language, not just Dart.
+**Keyway stores named secrets and injects the references in `.secrets.env`
+into exactly one command.**
 
-The repository commits a **manifest** (`.secrets.env`) holding non-secret
-config as literals and secrets as **references** (`kw://openai-api-key`).
-Real values live in the OS keystore / encrypted container via the `keyway`
-library. `keyway run -- npm start` resolves the references, builds the
+It is a secure, local replacement for the **secret-bearing portion** of
+`.env` files — for any application in any language, not just Dart. Keyway
+owns secrets, not general configuration: non-secret config stays in
+application config, the inherited environment, or a plain `.env` the
+application loads itself (which composes cleanly with `keyway run`).
+Full-dotenv replacement and one-file parity are explicit non-goals (§1) —
+ratified, with literals recorded as a compatible future extension gated on
+usage evidence (§14, §20).
+
+The repository commits a **manifest** (`.secrets.env`) binding environment
+names to **references** (`OPENAI_API_KEY=kw://acme/openai-api-key`). Real
+values live in the OS keystore / encrypted container via the `keyway`
+library. `keyway run -- npm start` resolves every reference, builds the
 child's environment in memory, and executes the command. The child receives
 ordinary environment variables; it needs no library, no Dart, no knowledge
 of `kw://`.
@@ -40,11 +55,11 @@ What this buys, concretely:
   history to protect forever and no key file whose loss decrypts it all.
   Rotation is an ordinary `set`.
 - **A repo that is safe to hand to development tools.** An AI agent or
-  indexer reading the workspace sees `kw://openai-api-key` — a name, not a
-  credential. This is robust by construction, not by advisory ignore-files.
-- **`.env` ergonomics preserved.** One committed file documents exactly which
-  variables an app needs; `check`/`fill` turn onboarding into "clone, run one
-  command, paste your keys".
+  indexer reading the workspace sees `kw://acme/openai-api-key` — a name,
+  not a credential. Robust by construction, not by advisory ignore-files.
+- **The environment-variable workflow preserved.** One committed file
+  documents exactly which secrets an app needs; a failed `run` lists every
+  missing one with the command that fixes it.
 - **No account, no server, no daemon, no network.** The entire product is a
   local binary over the already-audited library.
 
@@ -56,184 +71,170 @@ on an audited core.
 
 ## 1. Goals / non-goals
 
-**Goals (v1)** — the `run` / `set` / `get` / `rm` / `list` / `check` /
-`fill` / `import` / `doctor` / `init` / `completion` surface (§5); the
-manifest format specified exactly (§4); macOS and Linux desktop; signed,
-notarized release binaries plus `dart install`; onboarding UX good enough
-that a teammate needs one command; zero new third-party runtime dependencies
-(§8 SR-9); zero library changes required (§3).
+**Goals (v1)** — exactly five commands: `run`, `set`, `rm`, `list`,
+`doctor` (§5); the reference-only manifest specified exactly (§4); macOS
+and Linux desktop; signed, notarized release binaries plus `dart install`;
+the whole CLI model understandable from one `--help` screen; two runtime
+dependencies, both already audited (§2); zero library changes required.
 
 **Non-goals (v1)** —
 
 | Cut | Why |
 |---|---|
+| General configuration loading / literal manifest values | Ratified (owner, 2026-07-12): keyway owns secrets, not config. Literals would make it a strict dotenv variant with quoting/precedence surface forever; adding them later is compatible, removing them later never is. Non-secret config composes from app config, inherited env, or the app's own dotenv. |
+| Onboarding/convenience commands (`get`, `check`, `fill`, `import`, `init`, `completion`) | Recorded with individual reasoning in §20. The failed `run` *is* the onboarding workflow (§13 Phase 2 acceptance). |
 | Windows | Rides the core `WinCredApi` backend ([implementation-plan.md](implementation-plan.md) Phase 5). No interim key-on-disk scheme — that would be S4 storage behind a product that promises S3+ (design.md §9), violating fail-closed. |
-| Headless / CI operation | The library fails closed there by design (design.md §12; [headless-implementation-plan.md](headless-implementation-plan.md)). The CLI's job is a **good error**: this is a dev-machine tool; CI should use the CI platform's secret store (§5 `run`). |
+| Headless / CI operation | The library fails closed there by design (design.md §12). The CLI's job is a **good error**: this is a dev-machine tool; CI should use the CI platform's secret store. |
 | Secret sync / team sharing | The model is per-developer values behind a shared contract. Sharing values is 1Password/Doppler territory — a different product with a server in it. |
-| Shell hook / auto-env (direnv-style) | Rejected on principle, not effort: exporting secrets into an interactive shell leaks them to *every* subsequently launched process and into the shell's own memory for the session. Run-scoped injection is the model. |
-| Output masking (`op run`-style redaction) | Deferred, not rejected — masking requires interposing pipes on the child's stdio, which breaks TTY inheritance (child sees `isatty=false`: colors, prompts, buffering change). v1 chooses exec transparency; a `--mask` opt-in with the documented TTY trade-off is a v1.x candidate (§13). |
-| `kw+file://` materialization (`*_FILE` convention) | v1.x candidate (§13). Genuinely stronger than env for apps that support password-files; sketched so it isn't re-derived. |
-| Value interpolation / templating in the manifest | `${VAR}` expansion is dotenv scope-creep with injection-shaped edges. Literal or reference, nothing else. |
-| Import from password managers | v1 imports plaintext `.env` only. `op`/`bw` interop later, if ever. |
+| Shell hook / auto-env (direnv-style) | Rejected on principle: exporting secrets into an interactive shell leaks them to *every* subsequently launched process for the session. Run-scoped injection is the model. |
+| Output masking; `kw+file://` materialization | Real threat-model responses, deferred with full recorded designs in Appendix C — not scheduled scope. |
+| Value interpolation / templating | Injection-shaped surface; a manifest line is a name and a reference, nothing else. |
 
 ## 2. Architecture & packaging
 
 Two packages, one repository, per the standing decision (design.md §1 —
 the library is a small security primitive; the CLI brings parsing, TTY,
-process, and locking concerns that must not enlarge the library's audit
-surface):
+and process concerns that must not enlarge the library's audit surface):
 
 ```
-keyway_cli   (product: manifest, commands, prompting, exec, lock)
+keyway_cli   (product: manifest, five commands, prompting, exec)
     │  exact-pinned dependency (pre-1.0)
 keyway       (engine: platform storage, container, typed errors — unchanged;
               renamed from secret_store 2026-07-12, pre-publish)
 ```
 
-- **Repo layout:** convert to a pub workspace. Whether the library stays at
-  the root or both packages move under `packages/` is settled at
-  implementation time against pub's workspace constraints; the requirements
-  are: one repo, shared CI, the CLI pins the exact core version, and the
-  library's `repository:` link stays valid for pub.dev.
-- **The CLI needs zero library changes for v1.** `SecretStorage(appId:)`,
-  the string verbs, `containsKey`, `readAll` (enumeration capability),
-  `describe()`, and the typed error taxonomy cover every command (§17).
-  Remaining v1.x ask on the core follow-up list (design.md §13): keys-only
-  enumeration (so `list`/`check` stop materializing values).
-  Attributes-only `contains` shipped in core PR #3 — though on the CLI's v1
-  platforms (file backend) `contains` still decrypts the whole sealed
-  container, so one `readAll` per command remains the right resolution
-  pattern regardless.
+- **Repo layout (settled):** pub workspace with `keyway_cli` under
+  `packages/`; whether the library also moves under `packages/` is decided
+  during the conversion against pub's constraints — the requirements are one
+  repo, shared CI, the exact pin, and a valid pub.dev `repository:` link.
+- **Zero library changes, zero library asks.** `SecretStorage(appId:)`, the
+  verbs, `readAll` (enumeration), `describe()`, and the typed errors cover
+  all five commands (§17). The CLI conforms to the small core; the core does
+  not grow around CLI convenience. (Attributes-only `contains` shipped in
+  core PR #3 independently; on the CLI's v1 platforms the file backend still
+  decrypts the whole sealed container for any read, so one `readAll` per
+  command remains the right pattern regardless.)
 - **Dependency policy (normative):** runtime deps = `keyway` (exact pin) +
-  `args` (dart-lang official). Nothing else. The core's dependency-closure
-  snapshot test is replicated for the CLI package; CI fails if the tree
-  changes. Argument parsing, terminal echo control (`stdin.echoMode`), the
-  POSIX `execve`/`flock` bindings, and manifest parsing are all stdlib +
-  `dart:ffi` work (`package:ffi` is already in the pinned closure).
+  `ffi` (exact pin — already inside the core's audited closure). **No
+  `package:args`**: five commands with `--` required for `run` make the
+  grammar small enough to hand-parse auditably (the repo's own
+  hand-roll-over-depend precedent: the JNI shim, design.md §12). The core's
+  dependency-closure snapshot test is replicated for the CLI package; CI
+  fails if the tree changes.
 
-## 3. Store mapping — appId, references, scopes
+## 3. Store mapping — one appId, opaque keys
 
 **One fixed `appId` for the whole CLI**: **`keyway-cli`** (frozen, §16).
-Secrets are namespaced *inside* it using the library's key grammar, which
-already permits `/` (design.md §4):
 
-| Reference in manifest | Library key | Meaning |
-|---|---|---|
-| `kw://openai-api-key` | `openai-api-key` | machine-global secret |
-| `kw://myapp/database-password` | `myapp/database-password` | scoped secret |
+**There is no "scope" concept.** A reference `kw://<key>` maps directly to
+the library key `<key>`. Keys are opaque slash-separated strings under the
+library's existing grammar (`[A-Za-z0-9._/-]{1,120}`, design.md §4) —
+`acme/database-password` is organization by convention, not a CLI concept.
+No `--scope` flags, no global-vs-scoped semantics, no inference.
 
-Reference grammar: `kw://<segment>` or `kw://<segment>/<segment>` where each
-segment matches `[A-Za-z0-9._-]+` and the joined key respects the library's
-120-char cap. Case-sensitive. Anything else is a hard error.
+Why one appId: one container and **one** keystore item for the store key,
+so macOS users see one ACL prompt total (the Model-B consequence design.md
+§6 predicts: N secrets, one keychain item); `list` enumerates everything
+the CLI manages; and per-project containers would fake an isolation
+boundary that doesn't exist — everything is same-user anyway (design.md §8).
 
-Why one appId rather than appId-per-scope: one container and **one** keystore
-item for the store key, so macOS users see one ACL prompt total, not one per
-project (the Model-B consequence design.md §6 predicts: N secrets, one
-keychain item); enumeration (`list`) works across everything the CLI manages;
-and per-scope containers would fake an isolation boundary that doesn't exist —
-everything is same-user anyway (design.md §8).
-
-Why scopes are **explicit strings in the ref** and never inferred: inferring
-project identity from the git remote breaks on forks, from the path breaks on
-moved checkouts and worktrees. Identity is what is written in the committed
-manifest — zero config, greppable, and the whole team resolves the same
-names. Deliberate cross-project sharing is spelled `kw://shared/foo`.
+Why identity is never inferred from the repo: git-remote inference breaks
+on forks; path inference breaks on moves and worktrees. The committed
+reference *is* the identity — greppable, and the whole team resolves the
+same names. Cross-project sharing is spelled by convention:
+`kw://shared/foo`.
 
 ## 4. Manifest specification (`.secrets.env`)
 
-The manifest is a **committable contract**, not a dotenv dialect. The parser
-is strict and total (arbitrary bytes → parse result or typed error, never a
-crash — same stance as the container's TLV reader, and fuzzed the same way).
+The manifest is a **committable contract binding environment names to
+secret references — nothing else.** The parser is strict and total
+(arbitrary bytes → parse result or typed error, never a crash — the
+container TLV precedent, fuzzed the same way).
 
-The default filename stays **`.secrets.env`** rather than a tool-branded
-name: it describes the *content*, remains accurate if a team ever migrates
-tooling, and reads as what it is in a repo listing (§14).
+The complete grammar:
 
-Grammar, exactly:
+```
+# comments and blank lines are allowed
+OPENAI_API_KEY=kw://acme/openai-api-key
+DATABASE_URL=kw://acme/database-url
+```
 
-- UTF-8; a single leading BOM is tolerated and stripped; NUL bytes are an
-  error. CRLF is tolerated. Manifest ≤ 1 MiB, line ≤ 64 KiB.
+Normative rules:
+
+- Strict UTF-8; **one** leading BOM is tolerated and stripped (Windows
+  editors add them; tolerating one adds no user-facing concept). NUL bytes
+  are an error. LF or CRLF. Manifest ≤ 1 MiB, line ≤ 64 KiB.
 - Blank lines and lines whose first non-whitespace byte is `#` are ignored.
-  No inline comments — `KEY=value # note` puts `# note` in the value.
-- Entries are `NAME=VALUE`. `NAME` matches `[A-Za-z_][A-Za-z0-9_]*`.
-  Duplicate `NAME` is a **hard error** (silent last-wins hides mistakes).
-  `export NAME=…` is a hard error whose message says to drop `export`.
-- `VALUE` is everything after the first `=`, with surrounding whitespace
-  trimmed; a single pair of matching `"` or `'` quotes is stripped, with **no
-  escape processing** (the bytes inside are the value). No interpolation, no
-  multiline values.
-- If the (unquoted) value is exactly a `kw://` reference (§3 grammar), the
-  entry is a **reference**. If it merely *starts with* `kw://` but fails the
-  grammar, that is a **hard error** — it is almost certainly a typo'd
-  reference, and treating it as a literal would ship the typo into the child
-  env. A value that contains `kw://` elsewhere is an ordinary literal.
+  There are no inline comments.
+- Every other line must match, exactly and with no internal whitespace:
 
-**The tool never writes a manifest.** Not `import`, not `init`, not anything
-— they print to stdout and the user redirects. This keeps "the CLI never
-touches your repo" as an absolute, checkable property (SR-3).
+  ```
+  [A-Za-z_][A-Za-z0-9_]*=kw://[A-Za-z0-9._-]+(?:/[A-Za-z0-9._-]+)*
+  ```
+
+  with the key part (after `kw://`) also respecting the library's
+  120-character cap, enforced at parse time.
+- No literals, no quotes, no escapes, no `export`, no interpolation.
+- Duplicate environment names are errors (silent last-wins hides mistakes).
+  Multiple environment names may intentionally reference the same key.
+- Environment names and keys are case-sensitive.
+- Anything else on a non-comment line is a **hard error** naming the line
+  and the rule — there is no "treat it as a literal" fallback to hide a
+  typo'd reference.
+
+**The tool never writes a manifest** — or any other file in the repository
+(SR-3).
 
 ## 5. Command surface
 
-Conventions: no command accepts a secret **value** as an argument, anywhere
-(SR-1). All human-facing errors name the exact fix (DX-3). `--help`
-everywhere, with examples.
+The entire surface. No command accepts a secret **value** as an argument
+(SR-1); every failure names the exact fix (DX-3); the model fits on one
+`--help` screen (DX-6). Global flags: `--help`, `--version`. Nothing else —
+no color (so no `--no-color`/`NO_COLOR` machinery), no `--quiet` (success
+is already quiet). Data goes to stdout, diagnostics to stderr, everywhere.
 
 | Command | Behavior |
 |---|---|
-| `run [-f <manifest>]… [--] <cmd> [args…]` | The product. Default manifest: `./.secrets.env` **in the cwd only — no upward directory search** (a walk toward `/` could pick up a manifest planted in a parent directory, e.g. `/tmp`). Multiple `-f` compose; later files win per key. Parse → resolve **all** references → on any failure, list *every* missing/broken ref with its fix command and exit 78 **before** anything runs (no partial injection, SR-4) → exec (§6). On a headless/locked keystore: the library's typed error, plus CLI guidance ("dev-machine tool; use your CI's secret store in CI"). |
-| `set <name-or-ref>` | Accepts `name`, `scope/name`, or full `kw://…`, normalized per §3. Value via interactive hidden prompt (echo off; TTY required) or `--stdin` (exact bytes to EOF; one trailing `\n` stripped by default, `--keep-newline` to keep — the trailing-newline API-key footgun is worth a flag). Optional `--label` for keystore UIs. Refuses to prompt when stdin is not a TTY: scripts must say `--stdin`. |
-| `get <name-or-ref>` | Prints the value, raw bytes, **no added newline**, no TTY-dependent behavior (output identical piped or not — varying by `isatty` is a footgun). Exists for interop/scripting; docs steer toward `run`. |
-| `rm <name-or-ref>` | Deletes; error (exit 1) if absent. |
-| `list [--scope <s>]` | Names, scopes, labels. **Never values.** |
-| `check [-f <manifest>]…` | Parses the manifest(s), resolves every ref, prints a set/missing table with the exact `set` command per missing ref. Exit 0 iff all resolve. The team-onboarding contract: `git clone && keyway check`. |
-| `fill [-f <manifest>]…` | `check`, then interactively prompts for each missing secret. Clone → `fill` → running. |
-| `import <path>` | Reads a plaintext `.env`, stores each entry (`--scope` to namespace), prints the equivalent manifest to stdout. **Never modifies or deletes the source.** The output ends with honest guidance: secure deletion is not promised on modern filesystems/SSDs (journaling, wear-leveling) — delete the file, then **rotate** the credentials that lived in plaintext. |
-| `doctor` | Surfaces `describe()`: scheme, measured `SecurityLevel`, keystore reachability/locked state, container path, versions. On macOS additionally reports the binary-identity situation: running under `dart run`/JIT (trust unit = the shared VM — design.md §8) or an unsigned/ad-hoc binary earns a printed warning explaining keychain re-prompt behavior. |
-| `init` | Prints a commented starter manifest to stdout. |
-| `completion <bash\|zsh\|fish>` | Static completion scripts. |
-
-Global: `--version`, `-h/--help`, `-q/--quiet`, `--no-color` (and `NO_COLOR`
-/ not-a-TTY autodetect). There is deliberately **no `--verbose` that could
-ever print a value**: verbosity levels change *operation* detail, never data.
+| `keyway run [-f FILE] -- COMMAND [ARGS…]` | The product. **Exactly one manifest**: `-f FILE` or the default `./.secrets.env` — cwd only, no upward search (SR-15), no multi-file composition. `--` is **required**, making parsing unambiguous. Parse → resolve **every** reference → on any failure, list *every* missing key as a ready-to-run `keyway set KEY` line and exit 78 having launched nothing (SR-4) → overlay only the named variables onto the parent environment → `execve` (§6). Two documented idioms replace cut commands: **`keyway run -- true`** is the check ("do all references resolve?" — exit 0 iff yes), and **`keyway run -- printenv KEY`** is the explicit reveal/debug escape hatch, deliberately spelled inside the run-scoped model rather than as a standing extraction command (§20 `get`). |
+| `keyway set [--stdin] KEY` | `KEY` is the bare key spelling only (no `kw://` alias — one spelling). Value via interactive hidden prompt (echo off, TTY required), or `--stdin`: strict UTF-8, NUL rejected, exactly one trailing LF or CRLF stripped. No value argument exists (SR-1). No labels — on the v1 platforms the file backend renders them invisible anyway (§20). Prints `Stored.` after interactive input (the human typed blind and deserves an ack); silent with `--stdin`. |
+| `keyway rm KEY` | Idempotent, silent whether the key existed or not — matching the library's `delete` semantics and avoiding a check/delete race. |
+| `keyway list` | One key per line, sorted. No values, labels, tables, or filtering — stable for ordinary shell composition (`grep`, `wc -l`) without a formal porcelain API. |
+| `keyway doctor` | Reports exactly what `describe()` provides plus identity basics: scheme, measured `SecurityLevel`, available/locked, backend detail, CLI version, and **compiled binary vs. Dart VM** — the trust-unit warning (under `dart run`, the keychain ACL unit is the shared VM; design.md §8). No container paths, secret counts, or codesign parsing (§20). |
 
 ## 6. `run` semantics
 
-**Environment composition.** Child env = parent env, overlaid by the
-manifest's entries (literals and resolved references). **The manifest wins
-on conflict** — it is the declared contract, and letting a stray inherited
-`DATABASE_PASSWORD` silently beat the manifest is spooky action. This
-diverges from node-dotenv's existing-env-wins default; the divergence is
-documented. Nothing is removed from the inherited env (v1 has no
-`--isolate`); nothing not named in the manifest is added.
+**Environment composition.** Child env = parent environment with **only the
+manifest's named variables overlaid** (the resolved references). The
+manifest wins on collision — it is the declared contract for those names.
+Nothing else is added, removed, or rewritten.
 
-**Execution (POSIX).** Build the child's `envp` explicitly and replace the
-process image via FFI `execve` (with our own `PATH` resolution, execvp-style):
+**Execution (POSIX, the only implementation).** Build the child's `envp`
+explicitly and replace the process image via FFI `execve`, with our own
+PATH resolution (execvp semantics, §18):
 
 - Signals, TTY, exit status, and process-group semantics are inherited by
-  construction — there is no wrapper process left to forward anything, and
-  no long-lived process whose memory holds the resolved values.
-- The command line is executed **verbatim as an argv vector — never through
-  `/bin/sh -c`** (SR-13). No shell means no injection surface and no quoting
-  surprises.
-- The wrapper's own environment is never mutated; secrets go only into the
+  construction — no wrapper remains to forward anything, and no resident
+  process holds resolved values (SR-7).
+- The command is executed **verbatim as an argv vector — never through
+  `/bin/sh -c`** (SR-13).
+- The wrapper's own environment is never mutated; secrets exist only in the
   `envp` array handed to `execve`.
-
-**Fallback (and the future Windows path):** `Process.start(mode:
-inheritStdio)` + explicit forwarding of SIGINT/SIGTERM/SIGHUP + exit-code
-mirroring, with signal deaths mapped to 128+n.
+- **There is no spawn fallback.** On the supported platforms `execve`
+  suffices, and an untested second execution path is speculative surface.
+  Windows builds its own execution path when it lands with `WinCredApi`.
 
 **Exit codes** (spec, tested):
 
 | Code | Meaning |
 |---|---|
-| child's code | forwarded exactly once exec happens |
+| child's code | the child *is* the process once `execve` succeeds |
 | 2 | usage error |
 | 78 (EX_CONFIG) | manifest invalid, or references unresolved |
 | 69 (EX_UNAVAILABLE) | keystore unreachable / locked / store unusable / unsupported platform |
 | 70 (EX_SOFTWARE) | internal invariant violated (bug) |
 | 75 (EX_TEMPFAIL) | store write lock held by a live peer (`StoreBusy`) — retry |
-| 126 / 127 | command found-but-not-executable / not found |
-| 128+n | child killed by signal n (fallback path; native on the exec path) |
+| 126 / 127 | command found-but-not-executable / not found (pre-exec, from keyway) |
+| 128+n | child killed by signal n — reported by the shell, since the child replaced keyway |
 
 ## 7. Concurrency
 
@@ -249,11 +250,11 @@ first-use race (two processes each minting a store key) cannot happen.
 **The CLI therefore ships no locking of its own.** An earlier revision of
 this plan had the CLI carry its own `flock` because the library had cut
 cross-process locking in the austerity pass; the library's reinstatement
-supersedes that (§14). Read paths (`run`, `check`, `list`, `get`) remain
-lock-free by the library's design — atomic replace guarantees a reader sees
-a complete old or complete new store — so a wedged writer can never block
-launches. The CLI's only lock-related surface is UX: mapping `StoreBusy`
-to exit 75 with retry guidance (§17).
+supersedes that (§14). Read paths (`run`, `list`) remain lock-free by the
+library's design — atomic replace guarantees a reader sees a complete old
+or complete new store — so a wedged writer can never block launches. The
+CLI's only lock-related surface is UX: mapping `StoreBusy` to exit 75 with
+retry guidance (§17).
 
 ## 8. Security requirements (normative)
 
@@ -267,28 +268,27 @@ Each SR is a testable invariant; §12 maps them to tests.
   (restored on every exit path, including interrupt). Values exist in process
   memory and the library's stores, nowhere else.
 - **SR-3 — the CLI never writes into the repository.** No manifest creation,
-  mutation, or "helpful" rewriting. Output that looks like a manifest goes to
-  stdout.
+  mutation, or "helpful" rewriting.
 - **SR-4 — fail closed, atomically.** `run` resolves *everything* before
   starting *anything*. No partial injection, no empty-string placeholder, no
   "warn and continue".
-- **SR-5 — inject only what is named.** Exactly the manifest's entries are
-  added/overlaid; there is no dump-a-namespace mode (contrast envchain).
-- **SR-6 — output hygiene.** No secret value in any error, prompt echo,
-  diagnostic, or verbose output — inherits the library's guarantee
-  (design.md §4 "Error hygiene") and extends it to everything the CLI prints.
+- **SR-5 — inject only what is named.** Exactly the manifest's environment
+  names are overlaid; there is no dump-a-namespace mode (contrast envchain).
+- **SR-6 — output hygiene.** No secret value in any error, prompt echo, or
+  diagnostic — inherits the library's guarantee (design.md §4 "Error
+  hygiene") and extends it to everything the CLI prints.
 - **SR-7 — memory honesty.** Inherits design.md §8's stance: Dart GC-heap
   copies cannot be zeroed; the CLI does not pretend otherwise. It minimizes
-  copies, and on the exec path the wrapper's image (and any heap copies) is
-  replaced wholesale by the child.
+  copies, and on success the wrapper's image (heap included) is replaced
+  wholesale by the child.
 - **SR-8 — zero network I/O.** The CLI makes no network calls, full stop —
   a checkable product guarantee. Enforcement is honest about its mechanism:
   the pinned dependency closure contains no networking code, and the CLI's
   own surface is small enough to audit for `Socket`/`HttpClient` use; there
   is no sandbox pretending to enforce it at runtime.
-- **SR-9 — supply-chain parity with the core.** Runtime deps: `keyway`
-  (exact pin) + `args`. Closure snapshot test in CI; OSV scanning; the same
-  "a pin moves only by reviewed decision" rule (design.md §10).
+- **SR-9 — supply-chain parity with the core.** Runtime deps: `keyway` +
+  `ffi`, both exact-pinned. Closure snapshot test in CI; OSV scanning; the
+  same "a pin moves only by reviewed decision" rule (design.md §10).
 - **SR-10 — mutation safety is inherited, not reimplemented.** Every store
   mutation goes through the library's verbs, which serialize writers across
   isolates and processes via the cross-writer `flock` (design.md §7). The
@@ -298,8 +298,8 @@ Each SR is a testable invariant; §12 maps them to tests.
   signed and notarized. Not (only) for Gatekeeper: the login-keychain ACL on
   the store-key item binds to the acting binary's code identity (design.md
   §8), so an unstable identity means a re-prompt per upgrade — the category's
-  best-known papercut (envchain). `doctor` surfaces identity problems;
-  pub-channel installs carry the documented VM-trust-unit caveat.
+  best-known papercut (envchain). `doctor` surfaces the VM-vs-compiled
+  trust-unit state; pub-channel installs carry the documented caveat.
 - **SR-12 — prompts require a TTY.** Interactive value entry refuses
   redirected stdin (use `--stdin`); no prompt can hang a script.
 - **SR-13 — no shell interpretation.** The child command is an argv vector
@@ -307,10 +307,15 @@ Each SR is a testable invariant; §12 maps them to tests.
 - **SR-14 — no downgrade, good guidance.** Unsupported platform / unreachable
   keystore surfaces the library's typed error plus CLI-level remediation
   (unlock keychain; SSH note; "use CI secrets in CI"). Never a weaker scheme.
-- **SR-15 — manifest discovery is non-magical.** Default path is exactly
-  `./.secrets.env`; no upward search, no home-dir fallback, no env-var
-  override of the default (an env-controlled manifest path would let a
-  polluted environment redirect resolution).
+- **SR-15 — manifest discovery is non-magical.** Exactly one manifest per
+  invocation: `-f` or `./.secrets.env`. No upward search, no home-dir
+  fallback, no env-var override of the default (a polluted environment must
+  not be able to redirect resolution), no multi-file composition.
+- **SR-16 — env values are validated before `envp`.** A referenced value
+  must decode as UTF-8 and contain no NUL (a NUL would silently truncate
+  the `envp` entry — an injection-shaped bug). Violations are typed errors
+  naming the key, never a silent mangle; only referenced values are decoded
+  at all (§18).
 
 ## 9. Threat model (delta over design.md §8)
 
@@ -318,8 +323,9 @@ The library's threat model covers secrets **at rest**. The CLI adds the
 injection step, and the honest statement of the boundary is:
 
 **What `run` protects:** the repository (nothing secret-derived is ever in
-it); the disk (no plaintext `.env`); backup/sync/indexing/agent exposure of
-the working tree; casual disclosure (argv, scrollback, shell history).
+it); the disk (no plaintext secret `.env` lines); backup/sync/indexing/agent
+exposure of the working tree; casual disclosure (argv, scrollback, shell
+history).
 
 **What `run` does not protect:** once injected, the values are ordinary
 environment variables of the child — visible to same-user process inspection
@@ -334,36 +340,36 @@ readable by any same-user process without a prompt.
 The mitigation ladder, by strength, is a documented product stance:
 **1)** direct library integration (secrets never enter any environment —
 the preferred path for apps that can), **2)** `kw+file://` materialization
-(v1.x — env carries a path, not a value; defeats inheritance and env
-inspection), **3)** env injection (universal default). The CLI's docs and
-`doctor` teach the ladder rather than implying env injection is more than
-it is. Same-user malware, root, and the child's own conduct remain out of
-scope at every tier.
+(Appendix C — env carries a path, not a value; defeats inheritance and env
+inspection), **3)** env injection (the universal default this CLI ships).
+The docs and `doctor` teach the ladder rather than implying env injection
+is more than it is. Same-user malware, root, and the child's own conduct
+remain out of scope at every tier.
 
 ## 10. DX requirements (normative)
 
 - **DX-1 — zero-config happy path.** In a repo with `./.secrets.env`,
-  `keyway run -- <cmd>` works with no flags, no config file, no init.
+  `keyway run -- <cmd>` works with no flags, no config, no init.
 - **DX-2 — fast.** AOT binary; `run` overhead (parse + resolve + exec) under
-  50 ms on a warm keystore. No daemon to make it faster; there is nothing to
-  warm.
+  50 ms on a warm keystore. No daemon; nothing to warm.
 - **DX-3 — every error names the fix.** Each typed library error and each
   CLI error maps to remediation text with the literal command to run (§17).
-- **DX-4 — onboarding is one command.** `check` output is the onboarding
-  document; `fill` is the onboarding action.
-- **DX-5 — plays well with scripts.** Stable stdout/stderr split (data vs.
-  diagnostics); `--quiet`; meaningful exit codes (§6); `NO_COLOR`. Anything
-  intended for machine consumption beyond exit codes waits for an explicit
-  `--porcelain` (v1.x) rather than letting humans' output become an API.
-- **DX-6 — the help teaches the model.** `--help` examples show manifest +
-  `set` + `run` in ten lines; `init` output is self-documenting.
+- **DX-4 — onboarding is the failed run.** `run` fails → it prints every
+  `keyway set KEY` needed → the user runs them → `run` succeeds. No separate
+  onboarding workflow exists, and none is needed.
+- **DX-5 — plays well with scripts.** Stable stdout/stderr split; meaningful
+  exit codes (§6); `list` is one-key-per-line. Machine consumption beyond
+  that waits for evidence (§20).
+- **DX-6 — the whole model fits on one help screen.** Five commands, two
+  global flags, one manifest grammar. This is an acceptance criterion, not
+  an aspiration (§13 Phase 1).
 
 ## 11. Distribution & release
 
 1. **GitHub Releases (primary):** per-platform `dart compile exe` binaries
    from a CI matrix (macOS arm64/x64, Linux x64/arm64), macOS ones signed +
-   notarized (SR-11), SHA-256 sums + build provenance attestation. Honest
-   note: Dart AOT builds are not bit-reproducible; provenance is the
+   notarized + stapled (SR-11), SHA-256 sums + build provenance attestation.
+   Honest note: Dart AOT builds are not bit-reproducible; provenance is the
    compensating control.
 2. **Homebrew tap** (`brew install danreynolds/tap/keyway`), day one;
    homebrew-core once traction justifies it. Scoop/winget when Windows lands.
@@ -373,9 +379,9 @@ scope at every tier.
    ACL prompts may recur; the signed release binary is the promoted channel
    for everyone else. The "any language" positioning fails if the answer to
    "how do I install it" starts with "install Dart".
-4. **Registrations:** see Appendix B's checklist — `keyway.dev`, GitHub
-   org/repo rename, pub.dev names, the npm/PyPI reclamation filings, and
-   scoped-org fallbacks.
+4. **Registrations:** Appendix B's checklist — `keyway.dev`, pub.dev names,
+   npm/PyPI reclamation filings, scoped-org fallbacks. (The GitHub repo
+   rename to `danReynolds/keyway` is done, 2026-07-12.)
 
 Release train: the CLI pins the exact core version; a core release triggers a
 reviewed CLI pin-bump release. Independent CHANGELOGs; per-package tags.
@@ -386,106 +392,118 @@ The core's bar applies: every claim exercised for real, not mocked
 (README "Testing").
 
 - **Unit tier:** manifest parser — table-driven spec tests plus a **fuzz
-  harness** (arbitrary bytes → typed error or valid parse, never a crash;
-  the container TLV precedent). Ref grammar; env composition (manifest-wins,
-  multi-`-f` precedence); exit-code mapping; remediation-text mapping for
-  every typed core error (§17).
-- **Command tier:** every command against `SecretStorage.withBackend(fake)` —
-  the exported test hatch exists for exactly this (design.md §4).
-- **Leak tier (SR-2/SR-6):** plant sentinel values; drive every error path,
-  prompt path, and `--quiet`/verbose permutation; assert the sentinel never
-  appears in any stdout/stderr/exit output. A PTY harness verifies echo-off
-  and echo-restoration on interrupt.
+  harness** (arbitrary bytes → typed error or valid parse, never a crash);
+  the entry regex including the 120-char cap and BOM/NUL/CRLF handling;
+  env composition (named-vars-only overlay); exit-code mapping;
+  remediation-text mapping for every typed core error (§17); UTF-8/NUL
+  value validation (SR-16).
+- **Command tier:** all five commands against
+  `SecretStorage.withBackend(fake)` — the exported test hatch exists for
+  exactly this (design.md §4).
+- **Leak tier (SR-2/SR-6):** plant sentinel values; drive every error path
+  and prompt path; assert the sentinel never appears in any output. A PTY
+  harness verifies echo-off and echo-restoration on interrupt.
 - **Integration tier:** real keystores in CI exactly like the core (macOS
   Keychain; Linux via `dbus-run-session` gnome-keyring in Docker):
-  `set → run → child sees value → rm` round-trips; exec-path signal/exit
-  fidelity (child SIGTERM → 128+15; exit codes forwarded); cross-writer
-  serialization (two concurrent `set`s → no lost update, courtesy of the
-  library's flock; a deliberately wedged holder → `StoreBusy` surfaced as
-  exit 75 with retry text); locked-keystore guidance path.
+  `set → run → child sees value → rm` round-trips; exec-path PATH/exit/
+  signal fidelity; cross-writer serialization (two concurrent `set`s → no
+  lost update, courtesy of the library's flock; a deliberately wedged
+  holder → `StoreBusy` as exit 75 with retry text); locked-keystore
+  guidance path.
 - **E2E:** `tool/test_cli.sh` joining the existing `tool/` suite; the
   README quickstart executed verbatim on both platforms.
 - **Supply chain:** the CLI's own dependency-closure snapshot test.
 
 ## 13. Phases
 
-**C1 — engine + skeleton.** Workspace conversion; package scaffold; manifest
-parser + fuzz + spec tests; ref/scope mapping; `set`/`get`/`rm`/`list`;
-`run` on the spawn fallback; command tier green on the fake backend.
-*Verify:* quickstart works end-to-end on macOS + Linux dev machines.
+**Phase 1 — contract and pure logic.** Workspace conversion
+(`packages/keyway_cli`); the five-command hand parser; the reference-only
+manifest parser + fuzz harness; reference resolution and environment
+composition; `set`, idempotent `rm`, one-key-per-line `list`; exhaustive
+fake-backend command tests and output-leak tests.
+*Acceptance:* the entire CLI model can be understood from one help screen.
 
-**C2 — hardening + the product feel.** FFI `execve` path + exit/signal
-matrix; `flock`; leak tier; `check`/`fill`/`doctor`/`init`; remediation-text
-mapping; completions; both integration legs in CI.
-*Verify:* full §12 matrix green in CI; SR checklist audited item by item.
+**Phase 2 — native process execution.** `execve` + final-environment PATH
+resolution, tested across direct paths, PATH search, missing commands,
+permissions, scripts, exit codes, signals, TTY inheritance, and UTF-8/NUL
+rejection; hidden prompting with PTY echo-restoration tests; minimal
+`doctor`; real macOS Keychain and Linux Secret Service round trips.
+*Acceptance:* `run` fails → lists missing keys → user runs `set` for each →
+`run` succeeds. No separate onboarding workflow exists.
 
-**C3 — release engineering.** Signing + notarization pipeline; GitHub
-Releases with checksums + provenance; Homebrew tap; `dart install` path
-validated from a clean machine; README/docs quickstart; Appendix B
-registration checklist completed.
-*Verify:* a person with no Dart toolchain installs and onboards a repo in
-under five minutes on macOS and Linux.
-
-**C4 — v1.x candidates (each a recorded design, not a promise):**
-`kw+file://` materialization (0600 file in a per-run 0700 runtime dir —
-`XDG_RUNTIME_DIR` / Darwin user temp — env carries the path, unlink after
-exit, stale-dir sweep on next run); `--mask` with the documented TTY
-trade-off; `--porcelain`; Windows (rides core Phase 5); keys-only enumeration
-in core (design.md §13); npm wrapper channel; man pages.
+**Phase 3 — release.** Freeze the macOS signing identifier and entitlement
+set; compile, sign, notarize, staple macOS binaries; Linux artifacts;
+checksums + provenance; Homebrew and `dart install` validated from clean
+machines; the documented quickstart executed verbatim on macOS and Linux;
+Appendix B registration checklist completed.
+*Acceptance:* a person with no Dart toolchain installs and onboards a repo
+in under five minutes on macOS and Linux.
 
 ## 14. Decision log
 
 - **References-in-repo over ciphertext-in-repo (dotenvx's model).** Nothing
   secret-derived in git history; rotation is mundane; the cost — no value
-  sync between teammates — is deliberate (§1 non-goals) and mitigated by
-  `check`/`fill`. Positioning: solo devs, OSS bring-your-own-key repos,
+  sync between teammates — is deliberate and served by the failed-run
+  onboarding loop. Positioning: solo devs, OSS bring-your-own-key repos,
   agent-safe working trees.
-- **Explicit scope strings; no repo-identity inference.** Git-remote
-  inference breaks on forks; path inference breaks on moves and worktrees.
-  The committed ref *is* the identity (§3).
-- **One appId, namespaced keys** — one keychain item and one ACL prompt, a
-  working `list`, no faux isolation (§3).
-- **Manifest wins over inherited env.** The contract beats the accident;
-  divergence from node-dotenv documented (§6).
-- **No shell hook mode.** Secrets in interactive shell env outlive and
-  out-spread any single command; rejected on principle (§1).
-- **No upward manifest search; no env-var default override** (SR-15).
-- **`execve` over a wrapper process**, spawn as fallback: signal/TTY/exit
-  fidelity by construction and no resident process holding values (§6).
-- **`set` has no value-argument form** — argv is world-readable (SR-1).
-- **Windows waits for `WinCredApi`.** No S4 interim (§1).
-- **Masking and `_FILE` deferred with recorded designs**, not silently
-  dropped (§1, §13).
+- **Reference-only manifests — ratified by the owner, 2026-07-12.** The one
+  scope decision treated as a product call, per two independent reviews
+  (both ~60/40 for reference-only). Decisive argument: reversibility —
+  literals can be added compatibly later; removing them would break every
+  manifest. Consequences owned explicitly: keyway is not a dotenv
+  replacement; one-file parity is a non-goal; migration guidance is "your
+  `.env` keeps its non-secret lines and loses its secret ones."
+- **Five-command surface (two-round RFC review, 2026-07-12).** Everything
+  beyond `run`/`set`/`rm`/`list`/`doctor` is cut or deferred with recorded
+  reasoning (§20). Review's framing, adopted as a standing rule: omission
+  is reversible; premature surface area is not.
+- **`get` rejected** — a standing plaintext-extraction command invites
+  `export X=$(keyway get …)`, the exact pattern the shell-hook non-goal
+  exists to prevent. The run-scoped idiom `keyway run -- printenv KEY` is
+  the documented escape hatch.
+- **`check` rejected as a command** — a failed `run` is a complete check
+  report, and `keyway run -- true` is the exit-code form. Documented, not
+  shipped.
+- **`rm` is idempotent and silent** — matches the library's `delete`
+  semantics and removes a check/delete race.
+- **No `package:args`** — the grammar is small enough to hand-parse
+  auditably; `--` required on `run` keeps it unambiguous.
+- **No spawn fallback** — untested second execution path = speculative
+  surface; Windows builds its own when it exists.
+- **No scope concept** — `kw://<key>` maps to the opaque library key;
+  slashes are convention, not semantics.
+- **Labels cut** — on the v1 platforms the resolver always lands on the
+  file backend, where labels surface in no UI at all.
+- **One leading BOM tolerated** — friction removal without a user-facing
+  concept.
+- **`Stored.` after interactive `set`** — the human typed blind; one ack
+  line is UX feedback, not API breadth. Silent with `--stdin`.
+- **Explicit scope strings; no repo-identity inference** (§3).
+- **One appId, opaque namespaced keys** (§3).
+- **Manifest references win over inherited env for the named variables** —
+  the declared contract beats the accident.
+- **No shell hook mode; no upward manifest search; no env-var default
+  override** (§1, SR-15).
+- **`execve` only; never a shell; `set` has no value-argument form.**
+- **Windows waits for `WinCredApi`.** No S4 interim.
 - **The lock lives in the CLI, not the library.** *(Superseded the same
   day, 2026-07-12: core PR #3 reinstated the cross-writer `flock` inside
-  the library — the first-write key race proved cheap to close and easy to
-  hit. The CLI now inherits mutation locking and ships none of its own;
-  §7, SR-10.)*
-- **Name: `keyway` (2026-07-12).** Decision record in Appendix B. The
-  library renames with it (one brand, two packages); public API identifiers
-  (`SecretStorage`, the error types) are **not** renamed — this is a
-  packaging rename, not an API rename — and the container's wire-format
-  constants are **frozen** regardless of branding (§16).
-- **Scheme: `kw://` (2026-07-12), replacing the draft `se://`.** Two
-  characters, brand-evident in any manifest line, no compatibility concern
-  (nothing shipped). Frozen with the name.
-- **Manifest filename stays `.secrets.env`** — content-descriptive over
-  tool-branded (§4).
-- **appId: `keyway-cli`, not bare `keyway`** — a library consumer choosing
-  `appId: 'keyway'` for their own app must not merge stores with the CLI
-  (§3, §16).
+  the library. The CLI inherits mutation locking and ships none of its
+  own; §7, SR-10.)*
+- **`deleteAll()` questions leave this RFC** — raised during review, then
+  withdrawn as CLI fallout on the correct grounds that "unused by this CLI"
+  is not a reason to change a library API. The genuine library question
+  (healthy-store wipe convenience vs. a deliberately-named destructive
+  reset that can recover an *unreadable* store — today's `deleteAll` begins
+  with `readAll()` and cannot) is recorded in
+  [research-agenda.md](research-agenda.md) §15 for its own review.
+- **Name: `keyway`; scheme `kw://`; appId `keyway-cli`; manifest filename
+  `.secrets.env`** (2026-07-12; §16, Appendix B).
 
 ## 15. Open questions
 
-- `fill` vs `setup` as the onboarding verb (pick at C2 by writing the docs
-  and seeing which reads better).
-- `--label` default: none, or derive from the manifest variable name?
-- Workspace layout (root package vs `packages/`), settled at C1 against
-  pub's constraints.
-- Whether `check` belongs in `run`'s failure output verbatim (probably: a
-  failed `run` *is* a check report).
-- `import` literal-vs-secret triage UX (per-entry interactive prompt is the
-  leading candidate; decide at C2).
+None at this time. The next decision point is the Phase 1 completion
+review.
 
 ## 16. Frozen constants
 
@@ -516,10 +534,9 @@ names — descriptive, and churning them buys nothing.
 
 Everything the CLI needs, and the contract for what each failure means to a
 user. Construction: `SecretStorage(appId: 'keyway-cli')` — once per process.
-Verbs: `readAll()` (run/check/list — gated on
+Verbs: `readAll()` (run/list — gated on
 `backend.capabilities.enumeration`, true for both v1 platforms),
-`writeString(key, value, label:)` (set/fill/import), `readString`/`read`
-(get), `delete` (rm), `containsKey`, `describe()` (doctor).
+`writeString(key, value)` (set), `delete` (rm), `describe()` (doctor).
 
 Error → CLI behavior map (exhaustive over the exported taxonomy; the leak
 tier drives every row):
@@ -528,7 +545,7 @@ tier drives every row):
 |---|---|---|
 | `KeystoreLocked` | 69 | login keychain / Secret Service is locked — how to unlock; "over SSH this is expected: keyway is a dev-machine tool" |
 | `KeystoreUnreachable` | 69 | no keystore here (headless/unsupported) — dev-machine tool; use the CI platform's secrets in CI |
-| `StoreKeyMissing` | 69 | container exists but its key is gone from the keystore — unrecoverable without a key backup (design.md §7 matrix); `keyway doctor` for paths; re-provision via `keyway fill` |
+| `StoreKeyMissing` | 69 | container exists but its key is gone from the keystore — unrecoverable without a key backup (design.md §7 matrix); re-provision with `keyway set` |
 | `ContainerMissing` | 69 | key exists, container file gone/moved — restore the file or re-provision |
 | `WrongStoreKey` | 69 | container doesn't match this machine's key (swapped/copied between machines) — restore the matching pair or re-provision |
 | `AuthenticationFailed` / `ContainerCorrupt` | 69 | container failed authentication / is corrupt — tamper or bit-rot; restore from backup |
@@ -541,7 +558,7 @@ tier drives every row):
 | `KeystoreOperationFailed` (catch-all) | 69 | the typed message + `keyway doctor` |
 
 Manifest/usage failures are the CLI's own: parse errors and unresolved refs
-→ 78 with the per-ref fix list; bad invocation → 2.
+→ 78 with the per-key fix list; bad invocation → 2.
 
 ## 18. Implementation notes (gotchas, so they're hit once)
 
@@ -556,39 +573,34 @@ Manifest/usage failures are the CLI's own: parse errors and unresolved refs
   resolves to `./cmd` unless `.` is explicitly on the user's PATH. A
   script without a shebang gets 126 and a message, not a silent
   `/bin/sh` retry (SR-13).
-- **Spawn fallback exit codes:** `dart:io` reports signal deaths as negative
-  `exitCode` on POSIX — map `-n` → `128+n`. Forward `SIGINT`/`SIGTERM`/
-  `SIGHUP` via `ProcessSignal.watch` to the child; with `inheritStdio` the
-  foreground process group already routes Ctrl-C, so forwarding covers the
-  non-TTY/backgrounded cases.
 - **Prompt echo restoration:** set `stdin.echoMode = false`, restore in
   `finally` **and** in a `ProcessSignal.sigint.watch` handler (exit 130
   after restoring) — a Ctrl-C mid-prompt must not leave the user's terminal
   silent. PTY test asserts both paths.
-- **`--stdin` byte handling:** read to EOF as bytes, strip exactly one
-  trailing `\n` (and a preceding `\r` if present) unless `--keep-newline`;
-  values are stored via `writeString` (UTF-8) — the env boundary is
-  string-shaped anyway (env vars cannot carry NUL); document that binary
-  secrets belong to the library tier, not the env tier.
+- **`--stdin` byte handling:** read to EOF as bytes; strict UTF-8 decode
+  (reject on failure); reject NUL; strip exactly one trailing LF or CRLF.
+  Values are stored via `writeString` — the env boundary is string-shaped
+  anyway (env vars cannot carry NUL); binary secrets belong to the library
+  tier, not the env tier.
+- **`readAll()` handling (SR-16):** decode **only the referenced values**
+  from the returned `Map<String, Uint8List>`; a referenced value that fails
+  UTF-8 decode or contains NUL is a typed CLI error naming the key (it was
+  stored via the bytes API — point at the library tier), never a silent
+  mangle. Unreferenced values are never decoded.
 - **Closure snapshot test:** replicate the core's `dart pub deps --json`
   snapshot for `keyway_cli`; the snapshot embeds package names, so it also
   pins the exact core version (§2's pin made testable).
-- **`readAll` returns `Map<String, Uint8List>`** — decode values as UTF-8 at
-  the env boundary; a value that fails UTF-8 decode is a typed CLI error
-  naming the key (it was stored via the bytes API — point at `get`/the
-  library tier), never a silent mangle.
 - **Output discipline:** data → stdout, diagnostics → stderr, everywhere
-  (`get` prints only the value to stdout; `import` prints only the manifest
-  to stdout). This is what makes `keyway import .env > .secrets.env` safe.
+  (`list` prints only keys to stdout). This is what makes shell composition
+  safe without a porcelain mode.
 
 ## 19. Golden transcripts (acceptance sketches)
 
-Condensed from the design walkthrough; C2 turns these into assertions.
-Set + run, the happy path:
+Phase 2 turns these into assertions. Set + run, the happy path:
 
 ```console
-$ keyway set acme-api/openai-api-key
-Value for acme-api/openai-api-key (input hidden):
+$ keyway set acme/openai-api-key
+Value for acme/openai-api-key (input hidden):
 Stored.
 
 $ keyway run -- npm start
@@ -599,30 +611,25 @@ $ ps -o pid,ppid,command | grep node
 81234  9021  node server.js          # parent is the shell — keyway exec'd away
 ```
 
-Fail-closed run (SR-4, DX-3), which is also `check`'s shape:
+Fail-closed run (SR-4, DX-3/DX-4) — this *is* the onboarding workflow:
 
 ```console
 $ keyway run -- npm start
 error: 2 of 3 references in .secrets.env are not set on this machine:
 
-  DATABASE_PASSWORD    kw://acme-api/database-password
-                       fix: keyway set acme-api/database-password
-  STRIPE_KEY           kw://shared/stripe-test-key
-                       fix: keyway set shared/stripe-test-key
+  keyway set acme/database-password
+  keyway set shared/stripe-test-key
 
 Nothing was launched.
 $ echo $?
 78
 ```
 
-Onboarding (DX-4):
+The check idiom (exit 0 iff every reference resolves):
 
 ```console
-$ git clone git@github.com:acme/acme-api && cd acme-api && keyway fill
-  ✓ kw://acme-api/openai-api-key      already set
-  kw://acme-api/database-password — value (input hidden):
-  kw://shared/stripe-test-key — value (input hidden):
-Done — 3/3 references resolve.
+$ keyway run -- true && echo ready
+ready
 ```
 
 `doctor`, macOS unentitled-CLI branch:
@@ -631,10 +638,32 @@ Done — 3/3 references resolve.
 $ keyway doctor
 scheme:     encrypted file + login-Keychain key   (macOS, unentitled CLI)
 level:      loginBound (S3)                        # measured, not assumed
-container:  ~/Library/Application Support/keyway-cli/secrets.enc  (0600, 3 secrets)
 keystore:   reachable, unlocked
-identity:   /opt/homebrew/bin/keyway — Developer ID signed ✓ (keychain ACL stable)
+binary:     compiled executable (stable keychain identity)
+keyway:     0.1.0
 ```
+
+## 20. Deferred and rejected surface (record, not roadmap)
+
+Per the review framing adopted in §14: these are recorded as rejected or
+unproven ideas. **Reconsider only with usage evidence.** None are v1.x
+promises.
+
+| Idea | Status | Reasoning |
+|---|---|---|
+| `get` | **Rejected** | A standing plaintext-extraction command creates the `$(keyway get …)` scripting path outside the run-scoped model. `keyway run -- printenv KEY` is the documented escape hatch. |
+| `check` | **Rejected** | `keyway run -- true` is the check; a failed `run` is the report. |
+| `fill` | Unproven | The failed-run loop covers onboarding at typical secret counts. |
+| `import` | Unproven | With reference-only manifests its job shrinks to "set the secret lines"; the manual flow is acceptable and dodges literal/secret triage UX. |
+| `init` | Unproven | The grammar is three lines in the README. |
+| `completion` | Unproven | Five commands; marginal value against permanent maintenance. |
+| Labels | Rejected for v1 | Invisible on the v1 platforms (file backend; no keystore UI shows them). |
+| Multiple manifests / composition | Unproven | Precedence rules are surface; one contract per invocation. |
+| Literal manifest values | **Owner-rejected for v1** | The ratified product decision (§14). Compatible to add later if migration evidence demands. |
+| Scope as a concept / `--scope` filtering | Rejected | Slashes are convention; a second naming concept buys nothing. |
+| JSON/porcelain output | Unproven | Exit codes + one-key-per-line suffice until someone's script says otherwise. |
+| `doctor` signing inspection / container paths / counts | Unproven | `BackendInfo` + VM-vs-compiled covers the security-relevant part. |
+| Output masking; `kw+file://` | Recorded designs | Appendix C — real threat-model responses preserved with their trade-offs. |
 
 ## Appendix A — CLI landscape snapshot (2026-07)
 
@@ -683,14 +712,39 @@ gone; only coined or compound names survive clean.
 npm `keyway` — a one-release 2022 toy ("the opposite of `Object.keys`");
 PyPI `keyway` — a one-day-in-2023 "persistent environment variables"
 project (ironically category-adjacent). File an npm abandoned-package
-dispute and a PyPI PEP 541 request; the npm wrapper channel (§13 C4) works
-as `@keyway/cli` either way.
+dispute and a PyPI PEP 541 request; a future npm wrapper channel works as
+`@keyway/cli` either way.
 
-**Registration checklist (owner actions, do the week of the rename):**
-register `keyway.dev` (unregistered as of 2026-07-12); rename the GitHub
-repo `danReynolds/secret_store` → `danReynolds/keyway` (GitHub redirects
-the old URL; the pubspec `repository:` field is updated in the rename
-commit and must match before pub publish); reserve the GitHub `keyway` org
-name if available; publish stub/placeholder packages where free (crates) or
-scoped (`@keyway` npm org); file the npm/PyPI reclamations; a five-minute
-USPTO TESS sanity pass on "KEYWAY" for software goods.
+**Registration checklist (owner actions):** ~~rename the GitHub repo~~
+(done 2026-07-12 — `danReynolds/keyway`; pubspec updated); register
+`keyway.dev` (unregistered as of 2026-07-12); reserve the GitHub `keyway`
+org name if available; publish stub/placeholder packages where free
+(crates) or scoped (`@keyway` npm org); file the npm/PyPI reclamations; a
+five-minute USPTO TESS sanity pass on "KEYWAY" for software goods.
+
+## Appendix C — recorded designs, not scheduled scope
+
+*Preserved because each answers a named limitation in §9's threat model.
+Reconsider only with usage evidence. Recording is not scheduling.*
+
+**`kw+file://` materialization (the `*_FILE` convention).** For a manifest
+entry like `DATABASE_PASSWORD_FILE=kw+file://acme/database-password`,
+materialize the value into a `0600` file inside a per-run `0700` runtime
+directory (`XDG_RUNTIME_DIR` on Linux; the Darwin per-user temp dir on
+macOS), put only the *path* in the environment, unlink after the child
+exits, and sweep stale run-dirs on the next invocation (crash cleanup).
+Defeats both env inheritance to descendants and same-user env inspection —
+the two sharpest limits of tier 3 — and the Docker-official-images
+ecosystem (`POSTGRES_PASSWORD_FILE`, …) already honors the convention.
+Costs: a secret touches the filesystem (tmpfs-backed on Linux; not
+guaranteed on macOS), crash-window cleanup, and a second reference scheme
+to explain.
+
+**Output masking (`op run` precedent).** Interpose pipes on the child's
+stdout/stderr and redact any occurrence of a resolved secret value before
+forwarding. Directly mitigates the child logging its own secrets. Costs:
+the child no longer sees a TTY (`isatty=false` changes colors, prompts,
+buffering), keyway becomes a resident wrapper again (undoing §6's
+exec-and-vanish), and redaction is bypassable by any encoding of the value.
+If ever built: opt-in `--mask`, never default, with the TTY trade-off
+documented.
