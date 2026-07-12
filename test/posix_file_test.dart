@@ -5,7 +5,7 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
 
-import 'package:secret_store/src/ffi/posix_file.dart';
+import 'package:keyway/src/ffi/posix_file.dart';
 import 'package:test/test.dart';
 
 /// These run on the real filesystem (hermetic under a temp dir) and prove the

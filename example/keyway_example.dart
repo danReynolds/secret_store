@@ -1,6 +1,6 @@
 // A tiny CLI demonstrating the whole public API.
 //
-//   dart run example/secret_store_example.dart
+//   dart run example/keyway_example.dart
 //
 // One constructor, one input: your app id. The library resolves the strongest
 // scheme this platform offers (see the README table) — on a plain CLI like
@@ -8,10 +8,10 @@
 // reports what was resolved.
 import 'dart:io';
 
-import 'package:secret_store/secret_store.dart';
+import 'package:keyway/keyway.dart';
 
 Future<void> main() async {
-  final store = SecretStorage(appId: 'com.example.secret_store_demo');
+  final store = SecretStorage(appId: 'com.example.keyway_demo');
 
   final info = await store.backend.describe();
   stdout.writeln('resolved scheme: ${info.scheme.name} '

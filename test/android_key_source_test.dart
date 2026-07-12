@@ -3,9 +3,9 @@ library;
 
 import 'dart:typed_data';
 
-import 'package:secret_store/src/android_keystore_key_source.dart';
-import 'package:secret_store/src/app_paths.dart';
-import 'package:secret_store/src/errors.dart';
+import 'package:keyway/src/android_keystore_key_source.dart';
+import 'package:keyway/src/app_paths.dart';
+import 'package:keyway/src/errors.dart';
 import 'package:test/test.dart';
 
 // The JNI/Keystore choreography itself is covered by the emulator tier

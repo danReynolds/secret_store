@@ -1,4 +1,4 @@
-# secret_store
+# keyway
 
 Cross-platform secret storage for Dart — **pure Dart, no Flutter required**.
 One API keeps each secret in the strongest place the operating system offers:
@@ -12,11 +12,11 @@ Dart's — and it reaches even Android's hardware Keystore without pulling in a
 Flutter dependency, so a headless server can still depend on it.
 
 ```sh
-dart pub add secret_store
+dart pub add keyway
 ```
 
 ```dart
-import 'package:secret_store/secret_store.dart';
+import 'package:keyway/keyway.dart';
 
 final store = SecretStorage(appId: 'com.example.myapp');
 

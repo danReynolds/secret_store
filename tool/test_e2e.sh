@@ -125,14 +125,14 @@ leg_unit() {
     dart analyze --fatal-infos && dart test -x integration
 }
 leg_macos_cli() {
-  cd "$REPO" && SECRET_STORE_INTEGRATION=1 dart test test/keychain_integration_test.dart
+  cd "$REPO" && KEYWAY_INTEGRATION=1 dart test test/keychain_integration_test.dart
 }
 leg_linux() { cd "$REPO" && ./tool/test_linux.sh; }
 leg_macos_app() {
   # Distinct APP_ID from the entitled leg — same machine, different scheme, so
   # they must not share an app-support dir (the migration guard would fire).
-  cd "$HARNESS" && flutter test integration_test/secret_store_test.dart \
-    -d macos --dart-define=APP_ID=com.example.secretStoreHarness.file \
+  cd "$HARNESS" && flutter test integration_test/keyway_test.dart \
+    -d macos --dart-define=APP_ID=com.example.keywayHarness.file \
     --dart-define=EXPECT_SCHEME=file --dart-define=EXPECT_LEVEL=login
 }
 leg_ios() {
@@ -141,7 +141,7 @@ leg_ios() {
   # probe succeeds and reports hardware — same as a real device. (The probe
   # reports software only where an SE is genuinely absent, e.g. a pre-T2 Intel
   # Mac, which isn't emulated.)
-  cd "$HARNESS" && flutter test integration_test/secret_store_test.dart \
+  cd "$HARNESS" && flutter test integration_test/keyway_test.dart \
     -d "$IOS_UDID" --dart-define=EXPECT_SCHEME=native \
     --dart-define=EXPECT_LEVEL=hardware
 }
@@ -149,7 +149,7 @@ leg_android() {
   boot_android_emu || return 1
   # Level is measured from the KEK (asserted in the dedicated test after a
   # write); leave EXPECT_LEVEL unset here.
-  cd "$HARNESS" && flutter test integration_test/secret_store_test.dart \
+  cd "$HARNESS" && flutter test integration_test/keyway_test.dart \
     -d "$(adb devices | grep -m1 '^emulator-' | cut -f1)" \
     --dart-define=EXPECT_SCHEME=file
 }
@@ -157,10 +157,10 @@ leg_entitled() {
   apply_entitled_overlay || return 1
   # This dev Mac (Apple silicon) has a Secure Enclave → hardware.
   local rc=0
-  (cd "$HARNESS" && flutter test integration_test/secret_store_test.dart \
+  (cd "$HARNESS" && flutter test integration_test/keyway_test.dart \
     -d macos --dart-define=EXPECT_SCHEME=native \
     --dart-define=EXPECT_LEVEL=hardware \
-    --dart-define=APP_ID=com.example.secretStoreHarness.native) || rc=1
+    --dart-define=APP_ID=com.example.keywayHarness.native) || rc=1
   restore_entitled_overlay
   return $rc
 }

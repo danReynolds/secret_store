@@ -6,6 +6,12 @@ First release. A bytes-first, async secret store for Dart — no Flutter, no
 platform channels, no native build step — that keeps each secret in the
 strongest place the OS offers and fails closed when there is none.
 
+Ships as `keyway`: the package was developed under the working name
+`secret_store` and renamed before this first publish (nothing was ever
+released under the old name). The container's wire-format constants that
+happen to carry the old name — the HKDF info strings `secret_store:v1:*` —
+are frozen protocol constants, deliberately not rebranded (doc/design.md §7).
+
 ### API
 
 - One production entry point: `SecretStorage(appId:)`. The library resolves the

@@ -12,7 +12,7 @@ library;
 
 import 'dart:convert';
 
-import 'package:secret_store/src/ffi/process_runner.dart';
+import 'package:keyway/src/ffi/process_runner.dart';
 import 'package:test/test.dart';
 
 void main() {
@@ -50,8 +50,8 @@ void main() {
   });
 
   test('a missing executable is launchFailed, never a throw', () async {
-    final r = await runner.run('secret_store_no_such_binary_xyz', const [],
-        timeout: ok);
+    final r =
+        await runner.run('keyway_no_such_binary_xyz', const [], timeout: ok);
     expect(r.launchFailed, isTrue);
     expect(r.exitCode, -1);
   });

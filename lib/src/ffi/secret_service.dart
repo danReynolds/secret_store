@@ -142,7 +142,7 @@ final class SecretToolApi implements KeystoreApi {
       [
         'store',
         '--label',
-        label ?? 'secret_store',
+        label ?? 'keyway',
         ..._attrs(service, account),
       ],
       stdin: base64.encode(value),
@@ -259,6 +259,7 @@ final class SecretToolApi implements KeystoreApi {
 
   @override
   Future<KeystoreProbe> probe(String service) async {
+    // FROZEN keystore account constant (predates the keyway rename).
     final r =
         await _run(['lookup', ..._attrs(service, '__secret_store_probe__')]);
     _scrub(r); // output is irrelevant to the probe and could be a real value

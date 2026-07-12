@@ -17,7 +17,7 @@ dart analyze --fatal-infos
 echo "==> unit tier"
 dart test -x integration
 echo "==> native OS-keystore integration tier (real keychain/secret-service)"
-SECRET_STORE_INTEGRATION=1 dart test -t integration
+KEYWAY_INTEGRATION=1 dart test -t integration
 
 echo
 echo "OK — native tiers green."

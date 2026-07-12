@@ -1,4 +1,4 @@
-# secret_store on macOS
+# keyway on macOS
 
 macOS has two schemes. The library picks one automatically — once per process,
 deterministically, and never by silently degrading.

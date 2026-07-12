@@ -6,8 +6,8 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
-import 'package:secret_store/secret_store.dart' show KeystoreLocked;
-import 'package:secret_store/src/ffi/secret_service.dart';
+import 'package:keyway/keyway.dart' show KeystoreLocked;
+import 'package:keyway/src/ffi/secret_service.dart';
 import 'package:test/test.dart';
 
 /// Pins the documented Linux limitation that a **locked** Secret Service
@@ -28,19 +28,19 @@ import 'package:test/test.dart';
 /// prompter, so it must run in its **own** `dbus-run-session` — CI gives it a
 /// dedicated step (see .github/workflows/ci.yml) so it can't strand the
 /// unlocked integration tier. It therefore requires a second opt-in beyond
-/// SECRET_STORE_INTEGRATION: on a real desktop session `-t integration` would
+/// KEYWAY_INTEGRATION: on a real desktop session `-t integration` would
 /// otherwise lock the developer's actual login keyring (unlock prompt, and a
 /// stranded test item). CI and tool/test_linux.sh set both. Locally on Linux:
 ///   dbus-run-session -- bash -c '
 ///     eval "$(printf pw | gnome-keyring-daemon --daemonize --unlock --components=secrets)"
-///     SECRET_STORE_INTEGRATION=1 SECRET_STORE_LOCKED_TEST=1 \
+///     KEYWAY_INTEGRATION=1 KEYWAY_LOCKED_TEST=1 \
 ///       dart test test/secret_service_locked_integration_test.dart'
 void main() {
-  final envEnabled = Platform.environment['SECRET_STORE_INTEGRATION'] == '1' &&
-      Platform.environment['SECRET_STORE_LOCKED_TEST'] == '1';
+  final envEnabled = Platform.environment['KEYWAY_INTEGRATION'] == '1' &&
+      Platform.environment['KEYWAY_LOCKED_TEST'] == '1';
   final skip = envEnabled
       ? false
-      : 'set SECRET_STORE_INTEGRATION=1 and SECRET_STORE_LOCKED_TEST=1 — this '
+      : 'set KEYWAY_INTEGRATION=1 and KEYWAY_LOCKED_TEST=1 — this '
           'test LOCKS the session\'s login collection, so it is safe only in a '
           'throwaway dbus-run-session (CI / tool/test_linux.sh), never a real '
           'desktop session';
@@ -50,7 +50,7 @@ void main() {
     'null, never crashes)',
     () async {
       final api = SecretToolApi();
-      const service = 'ca.danreynolds.secret_store.locktest';
+      const service = 'ca.danreynolds.keyway.locktest';
       final value = Uint8List.fromList(utf8.encode('locked-secret'));
 
       await api.set(service, 'k', value, label: 'lock test');

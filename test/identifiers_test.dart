@@ -1,7 +1,7 @@
 @Tags(['unit'])
 library;
 
-import 'package:secret_store/src/identifiers.dart';
+import 'package:keyway/src/identifiers.dart';
 import 'package:test/test.dart';
 
 void main() {

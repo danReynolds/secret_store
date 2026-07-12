@@ -1,6 +1,6 @@
 # Security policy
 
-`secret_store` stores credential material. Please treat vulnerabilities
+`keyway` stores credential material. Please treat vulnerabilities
 accordingly.
 
 ## Reporting

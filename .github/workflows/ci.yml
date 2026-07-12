@@ -50,7 +50,7 @@ jobs:
       - uses: dart-lang/setup-dart@65eb853c7ba17dde3be364c3d2858773e7144260 # v1.7.2
       - run: dart pub get
       # Real login Keychain round-trip.
-      - run: SECRET_STORE_INTEGRATION=1 dart test test/keychain_integration_test.dart
+      - run: KEYWAY_INTEGRATION=1 dart test test/keychain_integration_test.dart
 
   integration-linux:
     if: github.event_name != 'schedule'
@@ -69,14 +69,14 @@ jobs:
           dbus-run-session -- bash -c '
             eval "$(printf itest | gnome-keyring-daemon --daemonize --unlock --components=secrets)"
             export GNOME_KEYRING_CONTROL
-            SECRET_STORE_INTEGRATION=1 dart test test/secret_service_integration_test.dart
+            KEYWAY_INTEGRATION=1 dart test test/secret_service_integration_test.dart
           '
       # The locked-collection behavior, in its OWN D-Bus session: this test
       # locks the login collection (which a headless box can't unlock again), so
       # isolating it keeps it from stranding the unlocked tier above. It pins
       # that a locked keyring degrades to "not found" on reads and that delete()
       # fails CLOSED (KeystoreLocked) rather than reporting a removal that
-      # didn't happen. SECRET_STORE_LOCKED_TEST is the second opt-in that keeps
+      # didn't happen. KEYWAY_LOCKED_TEST is the second opt-in that keeps
       # `-t integration` on a real desktop from locking the developer's own
       # login keyring — only throwaway sessions (here, tool/test_linux.sh) set
       # it.
@@ -84,7 +84,7 @@ jobs:
           dbus-run-session -- bash -c '
             eval "$(printf itest | gnome-keyring-daemon --daemonize --unlock --components=secrets)"
             export GNOME_KEYRING_CONTROL
-            SECRET_STORE_INTEGRATION=1 SECRET_STORE_LOCKED_TEST=1 dart test test/secret_service_locked_integration_test.dart
+            KEYWAY_INTEGRATION=1 KEYWAY_LOCKED_TEST=1 dart test test/secret_service_locked_integration_test.dart
           '
 
   # osv-scanner-action ships as a REUSABLE WORKFLOW, not a step action; the

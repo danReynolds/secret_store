@@ -5,7 +5,7 @@
 
 # The Flutter host app carrying the on-device integration tiers — by far the
 # largest thing in the tree (Xcode projects, icon sets, its own lockfile). The
-# pub.dev "Example" tab is served by example/secret_store_example.dart.
+# pub.dev "Example" tab is served by example/keyway_example.dart.
 example_flutter/
 
 # Developer-only scripts (local test matrix, e2e harness, DP verification).

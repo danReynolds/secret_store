@@ -18,7 +18,7 @@ import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
-import 'package:secret_store/secret_store.dart';
+import 'package:keyway/keyway.dart';
 
 /// What this leg expects — set per environment, not detected (detection is
 /// what the test is *checking*). `EXPECT_SCHEME` is `native` | `file` (the
@@ -36,8 +36,8 @@ const String expectLevel = String.fromEnvironment('EXPECT_LEVEL');
 /// the scheme-migration guard on the unentitled leg's container file. Each
 /// macOS leg passes a distinct APP_ID so they stay isolated; mobile legs use
 /// the default.
-const appId = String.fromEnvironment('APP_ID',
-    defaultValue: 'com.example.secretStoreHarness');
+const appId =
+    String.fromEnvironment('APP_ID', defaultValue: 'com.example.keywayHarness');
 
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
@@ -108,7 +108,7 @@ void main() {
       markTestSkipped('entitled-macOS-only');
       return;
     }
-    const migAppId = 'com.example.secretStoreHarness.migration';
+    const migAppId = 'com.example.keywayHarness.migration';
     final dir = Directory(
         '${Platform.environment['HOME']}/Library/Application Support/$migAppId');
     final container = File('${dir.path}/secrets.enc');

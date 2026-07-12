@@ -4,11 +4,11 @@ library;
 import 'dart:convert';
 import 'dart:typed_data';
 
-import 'package:secret_store/secret_store.dart';
+import 'package:keyway/keyway.dart';
 // Validation and path derivation are internal (not exported); the front-API
 // test reaches them directly.
-import 'package:secret_store/src/app_paths.dart';
-import 'package:secret_store/src/identifiers.dart';
+import 'package:keyway/src/app_paths.dart';
+import 'package:keyway/src/identifiers.dart';
 import 'package:test/test.dart';
 
 void main() {
@@ -51,6 +51,8 @@ void main() {
       // The DP probe uses a fixed internal service containing a space so it can
       // never collide with — and then delete — a caller's item. This asserts
       // the invariant that keeps that true: no appId can equal that service.
+      // The string mirrors the FROZEN `_dpProbeService` constant in
+      // lib/src/ffi/keychain.dart (predates the keyway rename) verbatim.
       expect(() => validateAppId('secret_store dp-probe'),
           throwsA(isA<ArgumentError>()));
     });

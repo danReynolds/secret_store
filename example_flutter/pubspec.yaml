@@ -1,6 +1,6 @@
 name: example_flutter
 description: >-
-  Flutter host app for secret_store's mobile/desktop integration tiers: proves
+  Flutter host app for keyway's mobile/desktop integration tiers: proves
   the package runs inside Flutter apps and exercises the resolver on real
   platform keystores (macOS entitled/unentitled, iOS simulator, Android
   emulator). See doc/implementation-plan.md Phase 2.
@@ -13,7 +13,7 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  secret_store:
+  keyway:
     path: ../
 
 dev_dependencies:

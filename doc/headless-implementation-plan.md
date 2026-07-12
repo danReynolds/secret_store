@@ -159,7 +159,7 @@ surface until headless ships:
 - **Integration (CI, Linux):** real `systemd-creds` with `--with-key=host` in a
   container (no TPM needed — verified feasible). Proves the encrypt→store→
   decrypt round-trip and exit-code handling end to end. Gate behind
-  `SECRET_STORE_INTEGRATION=1`, `@TestOn('linux')`, alongside the existing
+  `KEYWAY_INTEGRATION=1`, `@TestOn('linux')`, alongside the existing
   secret-tool integration test.
 - CI **cannot** exercise real TPM sealing (`tpm2` mode) without a TPM/swtpm; the
   `host`-mode round-trip covers the plumbing, and the TPM binding itself is

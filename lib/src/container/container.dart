@@ -62,7 +62,10 @@ const List<int> _magic = [0x44, 0x53, 0x53, 0x31]; // "DSS1"
 // 2 = keyCommit header (current). 1 = the commitment-less pre-release layout,
 // rejected. (The "v1" inside the HKDF info strings below is an independent
 // protocol domain label, not this header byte — changing it would re-key
-// every store, so it stays fixed across compatible header revisions.)
+// every store, so it stays fixed across compatible header revisions. The
+// same goes for the strings' `secret_store:` prefix: a frozen wire-format
+// constant predating the package's rename to `keyway`, never rebranded —
+// changing it would be a container-format version bump.)
 const int _version = 2;
 const int _cipherXChaCha20Poly1305 = 1;
 const int _commitLength = 32;

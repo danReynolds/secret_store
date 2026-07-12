@@ -58,6 +58,9 @@ final _CFTypeRef _nullRef = nullptr;
 /// The probe's own service + account. The service contains a space, which the
 /// public `appId` grammar (`[A-Za-z0-9._-]`) can't produce, so the probe item
 /// can never collide with — and then delete — a real caller's secret.
+///
+/// FROZEN: the `secret_store` prefix is a keystore-identity constant that
+/// predates the package's rename to `keyway`. It is never rebranded.
 const String _dpProbeService = 'secret_store dp-probe';
 const String _dpProbeAccount = 'dp-probe';
 
@@ -535,7 +538,7 @@ final class AppleKeychainApi implements KeystoreApi {
       final data = _cfData(value)..let(refs.add);
       // Same default label as the Linux backend, so keystore UIs never show a
       // bare unlabeled item and behavior matches across platforms.
-      final labelRef = _cfString(label ?? 'secret_store')..let(refs.add);
+      final labelRef = _cfString(label ?? 'keyway')..let(refs.add);
 
       final addPairs = <(Pointer<Void>, Pointer<Void>)>[
         (_kSecClass, _kSecClassGenericPassword),
@@ -707,6 +710,7 @@ final class AppleKeychainApi implements KeystoreApi {
   @override
   Future<KeystoreProbe> probe(String service) async {
     try {
+      // FROZEN keystore account constant (predates the keyway rename).
       await get(service, '__secret_store_probe__');
       return const KeystoreProbe(available: true, locked: false);
     } on KeystoreLocked catch (e) {

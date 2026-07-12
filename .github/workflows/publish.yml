@@ -5,7 +5,7 @@ name: publish
 # match the `version:` in pubspec.yaml.
 #
 # One-time setup on pub.dev (Admin → Automated publishing → Enable publishing
-# from GitHub Actions): repository `danReynolds/secret_store`, workflow
+# from GitHub Actions): repository `danReynolds/keyway`, workflow
 # `publish.yml`. Then:  git tag v0.1.0 && git push origin v0.1.0
 on:
   push:

@@ -1,4 +1,4 @@
-# secret_store — security & best-practice research agenda
+# keyway — security & best-practice research agenda
 
 Input for a deep research pass over the package as of `ba8b918`. Each item says
 what to research, why (tied to the code as it stands), and what a good answer

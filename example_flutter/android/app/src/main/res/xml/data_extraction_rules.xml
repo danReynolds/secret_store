@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Living example of the secret_store Android backup exclusion (see
+<!-- Living example of the keyway Android backup exclusion (see
      doc/platforms/android.md): the store's wrapping key is hardware-bound
      and never migrates, so backed-up/transferred store data cannot be
      decrypted on another device (the library reports that as KeyInvalidated).
@@ -8,9 +8,9 @@
      SecretStorage(appId:), a directory under this app's files/ dir. -->
 <data-extraction-rules>
     <cloud-backup>
-        <exclude domain="file" path="com.example.secretStoreHarness/" />
+        <exclude domain="file" path="com.example.keywayHarness/" />
     </cloud-backup>
     <device-transfer>
-        <exclude domain="file" path="com.example.secretStoreHarness/" />
+        <exclude domain="file" path="com.example.keywayHarness/" />
     </device-transfer>
 </data-extraction-rules>

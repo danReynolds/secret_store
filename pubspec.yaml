@@ -1,11 +1,11 @@
-name: secret_store
+name: keyway
 description: >-
   Secret storage for Dart without Flutter: each secret in the OS keystore
   (macOS/iOS Keychain, Linux Secret Service, Android Keystore) or an
   authenticated encrypted file.
 version: 0.1.0
-repository: https://github.com/danReynolds/secret_store
-issue_tracker: https://github.com/danReynolds/secret_store/issues
+repository: https://github.com/danReynolds/keyway
+issue_tracker: https://github.com/danReynolds/keyway/issues
 topics:
   - security
   - secrets
