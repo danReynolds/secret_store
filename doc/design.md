@@ -349,9 +349,11 @@ magic "DSS1" | version u8 | cipher u8 | keyCommit(32)
   on a stable inode), and reused across operations. Reads are deliberately
   **not** locked: atomic replace means a reader always sees the whole old or
   whole new container, so a read is consistent without one. `flock` is advisory
-  and assumes the filesystem honors it — true for local app-data storage; a
-  network filesystem that emulates or ignores `flock` falls back to the
-  single-writer discipline.
+  and needs a filesystem that supports it — true for local app-data storage. On
+  one that does not (a `flock` returning `ENOLCK`/`EOPNOTSUPP`, e.g. some network
+  mounts), a mutating operation **fails closed** with `SecureFileError` rather
+  than silently proceeding unlocked: a dropped lock is a security downgrade, so
+  it surfaces instead of being swallowed.
 - **Read hardening.** Reads are size-capped (16 MiB), refuse non-regular files
   (a FIFO would block forever), and refuse a group/other-accessible container,
   key file, or store directory (the OpenSSH stance — we only ever create

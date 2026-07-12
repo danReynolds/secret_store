@@ -567,6 +567,13 @@ final class AppleKeychainApi implements KeystoreApi {
       // but empty", distinct from absent; the re-add takes the default/passed
       // label rather than preserving a prior custom one — an acceptable cost on
       // this rare edge, versus silently keeping stale secret bytes.)
+      //
+      // Unlike the non-empty update (atomic), this delete-then-add is NOT
+      // atomic: if the re-add fails after the delete, the item is left absent,
+      // not empty — surfaced as a loud typed error (not silent), and self-heals
+      // on retry (add-empty over an absent item succeeds). The keychain offers
+      // no atomic set-to-empty, and the value being dropped is the one the
+      // caller is replacing anyway, so this is the honest best available.
       if (value.isEmpty) {
         final delQuery = _dict([
           (_kSecClass, _kSecClassGenericPassword),

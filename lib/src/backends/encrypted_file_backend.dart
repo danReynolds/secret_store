@@ -25,10 +25,12 @@
 /// whole new one, never a torn mix. If a mutating peer holds the lock past a
 /// ~10s timeout, the operation throws [StoreBusy] rather than blocking forever
 /// (a crashed holder's lock is released by the OS when its fd closes, so a
-/// timeout means a *live* wedged peer). The lock is advisory and relies on the
-/// filesystem supporting `flock` — true for local app-data filesystems; some
-/// network filesystems emulate or ignore it, where the single-writer discipline
-/// still applies.
+/// timeout means a *live* wedged peer). The lock is advisory and needs a
+/// filesystem that supports `flock`; every local app-data filesystem does. On a
+/// rare one that doesn't (some network mounts return `ENOLCK`/`EOPNOTSUPP`), the
+/// mutating operation **fails closed** with [SecureFileError] rather than
+/// silently proceeding without the lock — a lost lock is a security downgrade,
+/// so it is surfaced, not swallowed.
 library;
 
 import 'dart:async';
