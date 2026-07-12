@@ -11,6 +11,10 @@ server can't use it; Python, Go, and Rust each have a `keyring`. This is
 Dart's — and it reaches even Android's hardware Keystore without pulling in a
 Flutter dependency, so a headless server can still depend on it.
 
+```sh
+dart pub add secret_store
+```
+
 ```dart
 import 'package:secret_store/secret_store.dart';
 
@@ -110,14 +114,19 @@ real keystore **code path** end-to-end, not that physical silicon mediated it.
 - **Mobile (inside a Flutter app):** iOS, or Android 12 (API 31)+.
 - One exact-pinned third-party runtime dependency, `cryptography`; the rest of
   the closure is dart-lang official, and a test fails CI if the tree changes.
+  Because that pin is exact, an app depending — directly or transitively — on a
+  different `cryptography` version won't resolve until the versions align; the
+  pin is a deliberate supply-chain control ([doc/design.md](doc/design.md) §10),
+  not an oversight.
 
 ## Status
 
-Pre-1.0 and not yet published to pub.dev; the API and on-disk container format
-may still change. Shipping today, each validated end-to-end against its real
-keystore: macOS (CLI and entitled), Linux, iOS, and Android 12+. Windows and
-headless servers are planned and fail closed until they land. Report
-vulnerabilities per [SECURITY.md](SECURITY.md); design rationale is in
+`0.1.0` is the first pub.dev release. It is pre-1.0, so the API and on-disk
+container format may still change — under pub's `^0.1.0` semantics a `0.2.0`
+may carry breaking changes. Shipping today, each validated end-to-end against
+its real keystore: macOS (CLI and entitled), Linux, iOS, and Android 12+.
+Windows and headless servers are planned and fail closed until they land.
+Report vulnerabilities per [SECURITY.md](SECURITY.md); design rationale is in
 [doc/design.md](doc/design.md) and [doc/architecture.md](doc/architecture.md),
 with a cross-ecosystem comparison in
 [doc/ecosystem-comparison.md](doc/ecosystem-comparison.md).
