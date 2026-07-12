@@ -1,0 +1,26 @@
+name: publish
+
+# Publishes to pub.dev via trusted publishing (OIDC — no long-lived token is
+# stored in the repo) when a v-prefixed version tag is pushed. The tag must
+# match the `version:` in pubspec.yaml.
+#
+# One-time setup on pub.dev (Admin → Automated publishing → Enable publishing
+# from GitHub Actions): repository `danReynolds/secret_store`, workflow
+# `publish.yml`. Then:  git tag v0.1.0 && git push origin v0.1.0
+on:
+  push:
+    tags: ['v[0-9]+.[0-9]+.[0-9]+*']
+
+# Least privilege: the default token stays read-only; only the publish job
+# opts into the OIDC id-token it needs.
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    permissions:
+      id-token: write # mint the OIDC token pub.dev verifies
+    # Reusable workflow pinned by commit SHA (repo convention — a tag is
+    # retargetable). This SHA is dart-lang/setup-dart v1.7.2, the same pin the
+    # CI workflow uses.
+    uses: dart-lang/setup-dart/.github/workflows/publish.yml@65eb853c7ba17dde3be364c3d2858773e7144260 # v1.7.2

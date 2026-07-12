@@ -1,0 +1,18 @@
+# Trims the published archive to the library and its consumer-facing docs.
+# Everything here stays in git — this only affects `dart pub publish`.
+# (README links to these files still resolve: pub.dev rewrites relative
+# links to point at the repository.)
+
+# The Flutter host app carrying the on-device integration tiers — by far the
+# largest thing in the tree (Xcode projects, icon sets, its own lockfile). The
+# pub.dev "Example" tab is served by example/secret_store_example.dart.
+example_flutter/
+
+# Developer-only scripts (local test matrix, e2e harness, DP verification).
+tool/
+
+# Point-in-time planning docs; the canonical design is doc/design.md and
+# doc/architecture.md, which stay in the archive.
+doc/research-agenda.md
+doc/implementation-plan.md
+doc/headless-implementation-plan.md
