@@ -63,6 +63,17 @@ jobs:
             export GNOME_KEYRING_CONTROL
             SECRET_STORE_INTEGRATION=1 dart test test/secret_service_integration_test.dart
           '
+      # The locked-collection limitation, in its OWN D-Bus session: this test
+      # locks the login collection (which a headless box can't unlock again), so
+      # isolating it keeps it from stranding the unlocked tier above. It pins
+      # that a locked keyring degrades to "not found" via `secret-tool` rather
+      # than crashing (behavior validated against real gnome-keyring).
+      - run: |
+          dbus-run-session -- bash -c '
+            eval "$(printf itest | gnome-keyring-daemon --daemonize --unlock --components=secrets)"
+            export GNOME_KEYRING_CONTROL
+            SECRET_STORE_INTEGRATION=1 dart test test/secret_service_locked_integration_test.dart
+          '
 
   # osv-scanner-action ships as a REUSABLE WORKFLOW, not a step action; the
   # old `uses: google/osv-scanner-action@v1` step was a dangling reference

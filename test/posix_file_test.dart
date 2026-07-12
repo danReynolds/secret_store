@@ -8,8 +8,14 @@ import 'package:secret_store/src/ffi/posix_file.dart';
 import 'package:test/test.dart';
 
 /// These run on the real filesystem (hermetic under a temp dir) and prove the
-/// POSIX shim delivers what dart:io cannot: 0600-from-birth, exclusive create,
-/// private directories, and the read cap.
+/// POSIX shim delivers what dart:io cannot: 0600-from-birth, atomic replace
+/// (including over a pre-planted destination symlink, which is replaced rather
+/// than written through), rejection of non-regular files (a FIFO), private
+/// directories, and the read cap. Two properties are covered by inspection
+/// rather than assertion: the fsync-before-rename ordering (not observable
+/// in-process without a syscall-counting seam, which is disproportionate surface
+/// for the security-critical file shim) and O_EXCL refusal at the *temp* path
+/// (whose name is randomized, so a collision can't be planted deterministically).
 void main() {
   late Directory tmp;
   const fs = SecureFileSystem();
@@ -37,6 +43,25 @@ void main() {
         tmp.listSync().whereType<File>().where((f) => f.path.contains('.tmp.'));
     expect(leftovers, isEmpty,
         reason: 'temp files must be renamed or cleaned up');
+  });
+
+  test('a destination symlink is replaced, not written through (anti-clobber)',
+      () {
+    // If an attacker pre-plants a symlink at the container path pointing outside
+    // the private dir, the atomic rename replaces the symlink with our real
+    // file — the symlink's target is never written. (The write goes to an
+    // O_EXCL temp, then rename(2) over the destination path, which does not
+    // follow a symlink there.)
+    final outside = '${tmp.path}/outside_target';
+    File(outside).writeAsStringSync('DO-NOT-CLOBBER');
+    final dest = '${tmp.path}/secrets.enc';
+    Link(dest).createSync(outside);
+    fs.writeAtomicSync(dest, Uint8List.fromList([7, 7, 7]));
+    expect(File(outside).readAsStringSync(), 'DO-NOT-CLOBBER',
+        reason: 'the symlink target must be untouched');
+    expect(FileSystemEntity.isLinkSync(dest), isFalse,
+        reason: 'the symlink was replaced by a real regular file');
+    expect(File(dest).readAsBytesSync(), [7, 7, 7]);
   });
 
   test('empty payload round-trips at 0600', () {
@@ -102,9 +127,19 @@ void main() {
       expect(fs.readCappedSync(p, maxBytes: 10), [1, 2]);
     });
 
-    test('refuses a non-regular file (a FIFO would block forever)', () {
+    test('refuses a non-regular file (a FIFO would block a read forever)', () {
+      // Both a directory and a FIFO are non-regular; the guard rejects each
+      // before any read. The FIFO is the security-relevant case: opening one
+      // for read blocks until a writer appears, so a naive reader at a planted
+      // FIFO path would hang forever. (A FIFO stats as `pipe`, not `file`.)
       final d = Directory('${tmp.path}/adir')..createSync();
       expect(() => fs.readCappedSync(d.path, maxBytes: 10),
+          throwsA(isA<SecureFileError>()));
+
+      final fifo = '${tmp.path}/a.fifo';
+      expect(Process.runSync('mkfifo', [fifo]).exitCode, 0,
+          reason: 'mkfifo should succeed on this POSIX host');
+      expect(() => fs.readCappedSync(fifo, maxBytes: 10),
           throwsA(isA<SecureFileError>()));
     });
   });
