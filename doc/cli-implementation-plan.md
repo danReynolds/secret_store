@@ -11,13 +11,15 @@ the CLI package is **`keyway_cli`**, and the library — formerly
 `secret_store`, never published under that name — is renamed **`keyway`**.
 The naming record is Appendix B; constants that froze with the name are §16.*
 
-*v1 scope is settled (2026-07-12) after a two-round independent RFC review:
-**five commands, reference-only manifests** — the latter explicitly ratified
-by the owner as a product decision, not a parser simplification. The
-review's governing insight is recorded here because it should govern future
-scope debates too: **omission is reversible; premature surface area is
-not.** Cut features are recorded in §20 and Appendix C with their
-reasoning — as evidence-gated ideas, not as a roadmap.*
+*v1 scope is settled: **five commands, mixed manifests** (literals +
+`kw://` references). The command surface came out of a two-round
+independent RFC review (2026-07-12); the manifest model was ratified
+reference-only the same day and deliberately superseded by mixed on
+2026-07-13 when the per-environment workflow was weighed (§14 records
+both). The review's governing insight is recorded here because it should
+govern future scope debates too: **omission is reversible; premature
+surface area is not.** Cut features are recorded in §20 and Appendix C
+with their reasoning — as evidence-gated ideas, not as a roadmap.*
 
 Governing rules, inherited from [implementation-plan.md](implementation-plan.md)
 and extended: **one clear way to do things**; **the library stays the security
@@ -28,23 +30,25 @@ the CLI must be auditable to the same standard as the core.
 
 ## 0. Product statement
 
-**Keyway stores named secrets and injects the references in `.secrets.env`
-into exactly one command.**
+**Keyway turns `.env` into a safe-to-commit manifest: literal config
+stays, secret values become `kw://` references, and `keyway run` injects
+both into exactly one command.**
 
-It is a secure, local replacement for the **secret-bearing portion** of
-`.env` files — for any application in any language, not just Dart. Keyway
-owns secrets, not general configuration: non-secret config stays in
-application config, the inherited environment, or a plain `.env` the
-application loads itself (which composes cleanly with `keyway run`).
-Full-dotenv replacement and one-file parity are explicit non-goals (§1) —
-ratified, with literals recorded as a compatible future extension gated on
-usage evidence (§14, §20).
+It is a secure, local replacement for plaintext `.env` files — for any
+application in any language, not just Dart. One committed file per
+environment (`.secrets.env` by default; `.secrets.staging.env` via `-f`)
+carries the complete environment contract: non-secret literals verbatim,
+secrets as references. (Mixed manifests ratified 2026-07-13, superseding
+the earlier reference-only ruling — §14.) What keyway refuses to become is
+a dotenv *dialect* parser: literals carry no quoting, escaping, or
+interpolation semantics, ever (§1, §4).
 
-The repository commits a **manifest** (`.secrets.env`) binding environment
-names to **references** (`OPENAI_API_KEY=kw://acme/openai-api-key`). Real
-values live in the OS keystore / encrypted container via the `keyway`
-library. `keyway run -- npm start` resolves every reference, builds the
-child's environment in memory, and executes the command. The child receives
+The repository commits a **manifest** (`.secrets.env`) holding non-secret
+literals (`API_URL=https://…`) and secret **references**
+(`OPENAI_API_KEY=kw://acme/openai-api-key`). Real values live in the OS
+keystore / encrypted container via the `keyway` library.
+`keyway run -- npm start` resolves every reference, builds the child's
+environment in memory, and executes the command. The child receives
 ordinary environment variables; it needs no library, no Dart, no knowledge
 of `kw://`.
 
@@ -75,7 +79,7 @@ provider matrix, and an audited single-third-party-dependency core.
 ## 1. Goals / non-goals
 
 **Goals (v1)** — exactly five commands: `run`, `set`, `rm`, `list`,
-`doctor` (§5); the reference-only manifest specified exactly (§4); macOS
+`doctor` (§5); the manifest format specified exactly (§4); macOS
 and Linux desktop; signed, notarized release binaries plus `dart install`;
 the whole CLI model understandable from one `--help` screen; two runtime
 dependencies, both already audited (§2); zero library changes required.
@@ -84,7 +88,7 @@ dependencies, both already audited (§2); zero library changes required.
 
 | Cut | Why |
 |---|---|
-| General configuration loading / literal manifest values | Ratified (owner, 2026-07-12): keyway owns secrets, not config. Literals would make it a strict dotenv variant with quoting/precedence surface forever; adding them later is compatible, removing them later never is. Non-secret config composes from app config, inherited env, or the app's own dotenv. |
+| Dotenv-dialect compatibility (quotes, escapes, multiline, inline comments, interpolation) | Literals are verbatim-after-`=`, nothing more (§4). Keyway defines one strict format; it does not parse the dotenv dialect zoo, and a keyway manifest is not promised to round-trip through dotenv tools or vice versa. |
 | Onboarding/convenience commands (`get`, `check`, `fill`, `import`, `init`, `completion`) | Recorded with individual reasoning in §20. The failed `run` *is* the onboarding workflow (§13 Phase 2 acceptance). |
 | Windows | Rides the core `WinCredApi` backend ([implementation-plan.md](implementation-plan.md) Phase 5). No interim key-on-disk scheme — that would be S4 storage behind a product that promises S3+ (design.md §9), violating fail-closed. |
 | Headless / CI operation | The library fails closed there by design (design.md §12). The CLI's job is a **good error**: this is a dev-machine tool; CI should use the CI platform's secret store. |
@@ -167,17 +171,25 @@ same names. Cross-project sharing is spelled by convention:
 ## 4. Manifest specification (`.secrets.env`)
 
 The manifest is a **committable contract binding environment names to
-secret references — nothing else.** The parser is strict and total
-(arbitrary bytes → parse result or typed error, never a crash — the
+non-secret literals and secret references.** The parser is strict and
+total (arbitrary bytes → parse result or typed error, never a crash — the
 container TLV precedent, fuzzed the same way).
+
+The default filename is **`.secrets.env`**; per-environment manifests are
+ordinary files selected with `-f`, with `.secrets.<env>.env` as the
+documented convention. The documented idiom for describing a secret (what
+it is, where to get it) is a plain comment above its line — human
+documentation, never parser semantics (§14).
 
 The complete grammar:
 
 ```
 # comments and blank lines are allowed
+# Stripe test-mode key — dashboard.stripe.com/test/apikeys
+API_URL=https://staging.api.acme.dev
+LOG_LEVEL=debug
 OPENAI_API_KEY=kw://acme-payments/openai-api-key
-DATABASE_URL=kw://acme-payments/database-url
-STRIPE_KEY=kw://acme-shared/stripe-test-key   # shared across repos, conspicuously
+STRIPE_KEY=kw://acme-shared/stripe-test-key
 ```
 
 Normative rules:
@@ -186,26 +198,29 @@ Normative rules:
   editors add them; tolerating one adds no user-facing concept). NUL bytes
   are an error. LF or CRLF. Manifest ≤ 1 MiB, line ≤ 64 KiB.
 - Blank lines and lines whose first non-whitespace byte is `#` are ignored.
-  There are no inline comments.
-- Every other line must match, exactly and with no internal whitespace:
-
-  ```
-  [A-Za-z_][A-Za-z0-9_]*=kw://[A-Za-z0-9._-]+(?:/[A-Za-z0-9._-]+)+
-  ```
-
-  with the key part (after `kw://`) also respecting the library's
-  120-character cap, enforced at parse time.
-- **At least two segments** (the namespace rule, §3): `kw://openai-api-key`
-  is a hard error whose message names the fix
-  (`kw://<project>/openai-api-key`). The easiest accidental cross-repo
-  bleed is unrepresentable, not merely discouraged.
-- No literals, no quotes, no escapes, no `export`, no interpolation.
+  There are no inline comments — a `#` after `=` is part of the value.
+- Entries are `NAME=VALUE`: `NAME` matches `[A-Za-z_][A-Za-z0-9_]*`,
+  immediately followed by `=`; `VALUE` is everything after the first `=`
+  with ASCII spaces and tabs trimmed at both ends. Anything else on a
+  non-comment line is a hard error naming the line and the rule.
+- If the trimmed `VALUE` starts with `kw://`, it **must** parse as a
+  reference — `kw://[A-Za-z0-9._-]+(?:/[A-Za-z0-9._-]+)+` (**at least two
+  segments**, the namespace rule of §3, so `kw://openai-api-key` is a hard
+  error naming the fix; key ≤ 120 chars, the library cap, enforced at
+  parse time). A typo'd reference never silently becomes a literal.
+- Otherwise `VALUE` is a **literal**, taken verbatim: no quote stripping,
+  no escapes, no interpolation, no `export`, no line continuation. An
+  empty `VALUE` sets the variable to the empty string. A literal needing
+  leading/trailing whitespace or embedded newlines is unsupported — that
+  is application-config territory.
 - Duplicate environment names are errors (silent last-wins hides mistakes).
   Multiple environment names may intentionally reference the same key.
 - Environment names and keys are case-sensitive.
-- Anything else on a non-comment line is a **hard error** naming the line
-  and the rule — there is no "treat it as a literal" fallback to hide a
-  typo'd reference.
+- **A literal is committed plaintext.** The grammar cannot verify that a
+  literal is not a secret; that guard is review visibility (a high-entropy
+  literal in a diff is a red flag) and documentation. The structural
+  guarantee is narrower and still real: a `kw://` line never carries a
+  value, and the reference grammar cannot be satisfied by one.
 
 **The tool never writes a manifest** — or any other file in the repository
 (SR-3).
@@ -229,9 +244,10 @@ is already quiet). Data goes to stdout, diagnostics to stderr, everywhere.
 ## 6. `run` semantics
 
 **Environment composition.** Child env = parent environment with **only the
-manifest's named variables overlaid** (the resolved references). The
-manifest wins on collision — it is the declared contract for those names.
-Nothing else is added, removed, or rewritten.
+manifest's named variables overlaid** — non-secret literals and resolved
+references, one uniform rule. The manifest wins on collision — it is the
+declared contract for those names. Nothing else is added, removed, or
+rewritten.
 
 **Execution (POSIX, the only implementation).** Build the child's `envp`
 explicitly and replace the process image via FFI `execve`, with our own
@@ -418,8 +434,9 @@ The core's bar applies: every claim exercised for real, not mocked
 
 - **Unit tier:** manifest parser — table-driven spec tests plus a **fuzz
   harness** (arbitrary bytes → typed error or valid parse, never a crash);
-  the entry regex including the minimum-two-segment rule, the 120-char
-  cap, and BOM/NUL/CRLF handling;
+  the entry grammar including the minimum-two-segment rule, the 120-char
+  cap, literal-edge cases (verbatim semantics, empty values, trimming,
+  `kw://`-prefixed hard errors), and BOM/NUL/CRLF handling;
   env composition (named-vars-only overlay); exit-code mapping;
   remediation-text mapping for every typed core error (§17); UTF-8/NUL
   value validation (SR-16).
@@ -443,8 +460,8 @@ The core's bar applies: every claim exercised for real, not mocked
 ## 13. Phases
 
 **Phase 1 — contract and pure logic.** Workspace conversion
-(`packages/keyway_cli`); the five-command hand parser; the reference-only
-manifest parser + fuzz harness; reference resolution and environment
+(`packages/keyway_cli`); the five-command hand parser; the manifest parser
+(mixed literals + references) + fuzz harness; reference resolution and environment
 composition; `set`, idempotent `rm`, one-key-per-line `list`; exhaustive
 fake-backend command tests and output-leak tests.
 *Acceptance:* the entire CLI model can be understood from one help screen.
@@ -479,6 +496,39 @@ in under five minutes on macOS and Linux.
   manifest. Consequences owned explicitly: keyway is not a dotenv
   replacement; one-file parity is a non-goal; migration guidance is "your
   `.env` keeps its non-secret lines and loses its secret ones."
+  *(Superseded 2026-07-13 — see the mixed-manifests entry below; the
+  compatible-to-add-later property is exactly what was exercised.)*
+- **Mixed manifests — ratified by the owner, 2026-07-13, superseding
+  reference-only.** The per-environment workflow decided it: under
+  reference-only, environment files come in pairs (`.env.staging` +
+  `.secrets.staging.env`), dotenv tooling survives alongside keyway,
+  non-self-loading apps (Go/Rust/shell) get no literal story at all, and
+  the paste-a-secret-at-2am risk is *displaced* into a companion plaintext
+  file keyway never parses — not removed. One mixed file per environment
+  kills the companion `.env` entirely and restores the full replacement
+  pitch. Cost owned: the can't-hold-a-secret guarantee narrows from
+  structural to reviewable (a `kw://` line still never carries a value; a
+  literal is visibly plaintext in review). Containment: literals are
+  verbatim — the dotenv dialect (quotes, escapes, interpolation) stays
+  rejected (§1, §4).
+- **Import is dotenv-only, permanently (2026-07-13).** `keyway import`
+  reads `.env`-family files — the incumbent being replaced — and nothing
+  else. There is no provider concept to import *from*; `--stdin` is the
+  universal adapter for every other source
+  (`op read … | keyway set acme/key --stdin`). With mixed manifests,
+  import's output is a *complete* replacement manifest (secret lines →
+  refs, literal lines verbatim). Still §20-gated for v1; promote on
+  first-user evidence.
+- **Profiles are files (2026-07-13).** The already-ratified `-f` flag is
+  the entire mechanism: `.secrets.<env>.env` by convention, selected per
+  invocation. No profile concept, no `--profile`, no user config — the
+  dotenvx model, composing naturally with multi-segment namespaces
+  (`kw://acme-payments/staging/database-url`).
+- **Descriptions stay human-only (owner, 2026-07-13).** A plain comment
+  above an entry is the documented idiom for what a secret is and where to
+  get it. Machine-readable descriptions echoed by `run` (SecretSpec's
+  `description` field) were considered and declined — convention over
+  parser semantics.
 - **Five-command surface (two-round RFC review, 2026-07-12).** Everything
   beyond `run`/`set`/`rm`/`list`/`doctor` is cut or deferred with recorded
   reasoning (§20). Review's framing, adopted as a standing rule: omission
@@ -706,12 +756,12 @@ promises.
 | `get` | **Rejected** | A standing plaintext-extraction command creates the `$(keyway get …)` scripting path outside the run-scoped model. `keyway run -- printenv KEY` is the documented escape hatch. |
 | `check` | **Rejected** | `keyway run -- true` is the check; a failed `run` is the report. |
 | `fill` | Unproven | The failed-run loop covers onboarding at typical secret counts. |
-| `import` | Unproven | With reference-only manifests its job shrinks to "set the secret lines"; the manual flow is acceptable and dodges literal/secret triage UX. |
+| `import` | Unproven — design recorded | Dotenv-only source, interactive per-line secret/literal triage, output = one complete mixed manifest to stdout; `--stdin` covers every non-file source (§14). Promote on first-user evidence — expected quickly, since migration is the funnel. |
 | `init` | Unproven | The grammar is three lines in the README. |
 | `completion` | Unproven | Five commands; marginal value against permanent maintenance. |
 | Labels | Rejected for v1 | Invisible on the v1 platforms (file backend; no keystore UI shows them). |
-| Multiple manifests / composition | Unproven | Precedence rules are surface; one contract per invocation. |
-| Literal manifest values | **Owner-rejected for v1** | The ratified product decision (§14). Compatible to add later if migration evidence demands. |
+| Multiple manifests / composition | Unproven | Precedence rules are surface; one contract per invocation — `-f` selects, never merges. |
+| Machine-readable descriptions | Rejected | Comments above an entry are the idiom (§4, §14); parser-echoed metadata declined by the owner. |
 | Scope as *command-surface* semantics (`--scope`, filtering, inference) | Rejected | The ≥2-segment grammar rule (§3/§4) is namespacing without a concept: no flags, no state, no discovery. |
 | Per-namespace physical sharding | Unproven | Would multiply keystore items, recovery states, and locking paths; provides no authorization (same-user boundary regardless, design.md §8). Reconsider only on store-size or recovery evidence. |
 | JSON/porcelain output | Unproven | Exit codes + one-key-per-line suffice until someone's script says otherwise. |
