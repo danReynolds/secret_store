@@ -7,7 +7,24 @@ security and installation contract.
 
 ## One-time owner setup
 
-1. Create the protected GitHub environment `release` and require approval for
+1. Protect `main` before adding release credentials:
+
+   - require changes to arrive through a pull request;
+   - require the branch to be current and require every top-level job in the
+     ordinary `ci` workflow: both `analyze-and-test` matrix legs,
+     `cli-minimum-sdk`, `integration-macos`, `integration-linux`,
+     `supply-chain`, and `crypto-pin-canary`;
+   - require conversation resolution and signed commits; and
+   - disallow force pushes and branch deletion, including for administrators.
+
+   This is a single-maintainer repository, so do not require an approving
+   review that its owner cannot provide on their own pull request. The two
+   deployment environments below remain separately approval-gated. In
+   **Settings → Actions → General**, also enable **Require actions to be
+   pinned to a full-length commit SHA**. The workflows already use full SHAs;
+   this setting prevents a future regression.
+
+2. Create the protected GitHub environment `release` and require approval for
    it. Add these environment secrets:
 
    - `APPLE_CERTIFICATE_P12_BASE64`
@@ -21,11 +38,11 @@ security and installation contract.
    - `HOMEBREW_TAP_TOKEN` — a fine-grained token with Contents write access to
      `danReynolds/homebrew-tap` only
 
-2. Create the public `danReynolds/homebrew-tap` repository with a `main`
+3. Create the public `danReynolds/homebrew-tap` repository with a `main`
    branch and a `Formula/` directory. The release workflow refuses to publish
    before it can read this repository; after the GitHub release exists it
    writes only `Formula/keyway.rb`.
-3. Create the protected GitHub environment `pub.dev` and require approval.
+4. Create the protected GitHub environment `pub.dev` and require approval.
    Push the signed core tag first:
 
    ```sh
@@ -55,9 +72,10 @@ security and installation contract.
    OIDC exclusively. Do not publish `keyway_cli` yet: its first manual
    publication occurs only after the signed native release in the section
    below, because it exact-pins this now-hosted core version.
-4. Complete Appendix B's owner actions: register `keyway.dev`, reserve the
-   GitHub organization if available, create the scoped npm fallback, file the
-   npm/PyPI reclamations, and record the trademark sanity check.
+5. Complete Appendix B's owner actions: confirm control of `keyway.dev` or
+   choose a domain fallback, decide whether a separate GitHub organization is
+   needed, create the scoped npm fallback, file the npm/PyPI reclamations, and
+   record the trademark sanity check.
 
 ## macOS identity and notarization
 

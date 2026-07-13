@@ -981,7 +981,7 @@ candidates; final four:
 
 | Finalist | Availability (pub / npm / brew / crates / PyPI / .dev) | Deciding factor |
 |---|---|---|
-| **keyway** ✅ | ✅ / squatted / ✅ / ✅ / squatted / ✅ (unregistered 2026-07-12) | Best metaphor and sound of the entire search; both squats are dead micro-projects; the brand collision (keyway.ai, AI-for-real-estate, ~$40M raised) is **out-of-category** |
+| **keyway** ✅ | ✅ / squatted / ✅ / ✅ / squatted / ❓ (registered since 2020; control unconfirmed) | Best metaphor and sound of the entire search; both squats are dead micro-projects; the brand collision (keyway.ai, AI-for-real-estate, ~$40M raised) is **out-of-category** |
 | envkeep | all clean | Only true clean sweep, but permanently one letter from EnvKey — an **in-category** hosted secrets product; near-word-same-niche is the worse confusion profile |
 | kove | all clean | Ownable coined word, but meaning-free (tagline must build it) and kove.com is an enterprise software mark |
 | keyhold | clean except PyPI | Sturdy, flat; outclassed by keyway's semantics |
@@ -1003,11 +1003,14 @@ dispute and a PyPI PEP 541 request; a future npm wrapper channel works as
 `@keyway/cli` either way.
 
 **Registration checklist (owner actions):** ~~rename the GitHub repo~~
-(done 2026-07-12 — `danReynolds/keyway`; pubspec updated); register
-`keyway.dev` (unregistered as of 2026-07-12); reserve the GitHub `keyway`
-org name if available; publish stub/placeholder packages where free
-(crates) or scoped (`@keyway` npm org); file the npm/PyPI reclamations; a
-five-minute USPTO TESS sanity pass on "KEYWAY" for software goods.
+(done 2026-07-12 — `danReynolds/keyway`; pubspec updated); confirm whether the
+owner controls `keyway.dev`, which has been registered since 2020, and either
+record that control or choose/acquire a domain fallback before release. The
+exact GitHub `keyway` name is an existing user, so decide whether a separate
+organization is needed before selecting and reserving a fallback. Publish
+stub/placeholder packages where free (crates) or scoped (`@keyway` npm org);
+file the npm/PyPI reclamations; perform a five-minute USPTO trademark sanity
+pass on "KEYWAY" for software goods.
 
 ## Appendix C — recorded designs, not scheduled scope
 
