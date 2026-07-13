@@ -43,5 +43,9 @@ jobs:
           test "$tag_verified" = "true"
       - run: dart pub get
       - run: ./tool/validate_publish.sh . cryptography ffi
+      - name: stage core package without workspace-only files
+        run: ./tool/stage_core_publish.sh "$RUNNER_TEMP/keyway-core-publish"
       - name: publish to pub.dev through GitHub OIDC
-        run: dart pub publish --force
+        run: |
+          cd "$RUNNER_TEMP/keyway-core-publish"
+          dart pub publish --force

@@ -29,7 +29,11 @@ security and installation contract.
    permit automated publishing until a package already exists:
 
    ```sh
-   dart pub publish
+   core_stage="$(mktemp -d)"
+   rmdir "$core_stage"
+   ./tool/stage_core_publish.sh "$core_stage"
+   (cd "$core_stage" && dart pub publish)
+   rm -rf "$core_stage"
    dart pub -C packages/keyway_cli publish
    ```
 
@@ -85,8 +89,11 @@ before the first tag.
 
    The validator permits only pub's expected warnings for the normative exact
    pins (`cryptography` and `ffi` in the core; `ffi` and `keyway` in the CLI).
-   It also proves the core archive excludes the separately published CLI
-   workspace.
+   For the core, it builds and validates the same clean-checkout staging form
+   used by automated publishing: an explicit package allowlist with no CLI
+   sources or repository-only workspace metadata. The CLI is validated from
+   its workspace directory, proving that both archives remain independently
+   publishable.
    Validation errors, dirty package files, or any new warning fail the release.
 
 3. Tag the exact reviewed commit with the package-specific tag:

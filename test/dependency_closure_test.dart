@@ -71,8 +71,8 @@ void main() {
     expect(File('pubspec_overrides.yaml').existsSync(), isFalse);
   });
 
-  test('core publish archive excludes workspace member packages', () {
+  test('pubignore does not hide the separately published CLI package', () {
     final pubignore = File('.pubignore').readAsStringSync();
-    expect(pubignore, contains(RegExp(r'^packages/$', multiLine: true)));
+    expect(pubignore, isNot(contains(RegExp(r'^packages/$', multiLine: true))));
   });
 }

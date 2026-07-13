@@ -14,7 +14,21 @@ package_directory="$1"
 shift
 expected_warning_count="$#"
 output="$(mktemp "${TMPDIR:-/tmp}/keyway-publish.XXXXXX")"
-trap 'rm -f "$output"' EXIT
+core_stage=""
+cleanup() {
+  rm -f "$output"
+  if [[ -n "$core_stage" ]]; then
+    rm -rf "$core_stage"
+  fi
+}
+trap cleanup EXIT
+
+if [[ "$package_directory" == "." ]]; then
+  core_stage="$(mktemp -d "${TMPDIR:-/tmp}/keyway-core-publish.XXXXXX")"
+  rmdir "$core_stage"
+  ./tool/stage_core_publish.sh "$core_stage"
+  package_directory="$core_stage"
+fi
 
 dart pub -C "$package_directory" publish --dry-run --ignore-warnings \
   2>&1 | tee "$output"
@@ -38,11 +52,6 @@ if [[ "$expected_warning_count" == "1" ]]; then
 fi
 if ! grep -Fxq "Package has $expected_warning_count $warning_noun." "$output"; then
   echo "publish validation warning summary changed unexpectedly" >&2
-  exit 1
-fi
-
-if [[ "$package_directory" == "." ]] && grep -Fq '── packages' "$output"; then
-  echo "core publish archive unexpectedly contains a pub workspace member" >&2
   exit 1
 fi
 

@@ -130,7 +130,11 @@ keyway       (engine: platform storage, container, typed errors — unchanged;
   one resolution and lockfile, shared CI, an exact core pin, and valid per-
   package pub.dev `repository:` links. The CLI package exposes only
   `bin/keyway.dart` through `executables: {keyway: keyway}`; it does not export
-  a second Dart library API.
+  a second Dart library API. Core publication uses a clean-checkout, explicit-
+  allowlist staging directory that omits `packages/` and removes the repository-
+  only `workspace:` field from the staged pubspec. This is necessary because a
+  root `.pubignore` exclusion for `packages/` is inherited by workspace members
+  and would also empty the separately published CLI archive.
 - **CLI SDK floor:** Dart `^3.10.0`. The primary release binaries need no Dart
   installation; the Dart-native channel can therefore use the single current
   `dart install keyway_cli` spelling without carrying the pre-3.10 activation

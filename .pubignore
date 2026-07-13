@@ -11,12 +11,10 @@ example_flutter/
 # Developer-only scripts (local test matrix, e2e harness, DP verification).
 tool/
 
-# Pub workspace members are separately published packages. Never embed the
-# complete CLI package inside the core library archive.
-packages/
-
 # Point-in-time planning docs; the canonical design is doc/design.md and
 # doc/architecture.md, which stay in the archive.
+doc/cli-*.md
+doc/ecosystem-comparison.md
 doc/research-agenda.md
 doc/implementation-plan.md
 doc/headless-implementation-plan.md
