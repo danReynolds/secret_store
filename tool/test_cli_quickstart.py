@@ -116,10 +116,18 @@ def main() -> int:
         missing = run_checked([executable, "run", "--", "./verify.sh"], repo)
         if missing.returncode != 78:
             raise AssertionError(f"initial run exited {missing.returncode}: {missing.stderr}")
-        if f"keyway set {KEY}" not in missing.stderr:
-            raise AssertionError(f"initial run omitted remediation: {missing.stderr!r}")
-        if missing.stdout:
-            raise AssertionError(f"failed run launched or wrote data: {missing.stdout!r}")
+        expected_missing = (
+            "error: 1 of 1 reference in ./.secrets.env is not set on this machine:\n"
+            "\n"
+            f"  keyway set {KEY}\n"
+            "\n"
+            "Nothing was launched.\n"
+        )
+        if missing.stdout or missing.stderr != expected_missing:
+            raise AssertionError(
+                "failed run launched or changed its onboarding transcript: "
+                f"{missing.stdout!r} {missing.stderr!r}"
+            )
 
         interactive_set(executable, repo, secret)
 
@@ -132,7 +140,7 @@ def main() -> int:
             )
 
         listed = run_checked([executable, "list"], repo)
-        if listed.returncode != 0 or KEY not in listed.stdout.splitlines():
+        if listed.returncode != 0 or listed.stdout != f"{KEY}\n" or listed.stderr:
             raise AssertionError(f"stored key not listed: {listed.stdout!r} {listed.stderr!r}")
 
         removed = run_checked([executable, "rm", KEY], repo)

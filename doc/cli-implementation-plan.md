@@ -871,7 +871,7 @@ Fail-closed run (SR-4, DX-3/DX-4) — this *is* the onboarding workflow:
 
 ```console
 $ keyway run -- npm start
-error: 2 of 3 references in .secrets.env are not set on this machine:
+error: 2 of 3 references in ./.secrets.env are not set on this machine:
 
   keyway set acme-payments/database-password
   keyway set acme-shared/stripe-test-key
@@ -892,12 +892,16 @@ ready
 
 ```console
 $ keyway doctor
-scheme:     encrypted file + login-Keychain key   (macOS, unentitled CLI)
-level:      loginBound (S3)                        # measured, not assumed
-keystore:   reachable, unlocked
-runtime:    compiled executable (signature not inspected)
-keyway:     0.1.0
+scheme:   encrypted file
+level:    loginBound
+keystore: reachable, unlocked
+detail:   container=absent key=absent via keystore
+runtime:  compiled executable (signature not inspected)
+keyway:   0.1.0
 ```
+
+The `detail` presence words reflect the current store state and become
+`present` after first use; `level` remains the measured S3/login-bound result.
 
 ## 20. Deferred and rejected surface (record, not roadmap)
 
