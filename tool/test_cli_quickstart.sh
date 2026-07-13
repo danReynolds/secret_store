@@ -52,11 +52,18 @@ trap cleanup EXIT
 
 if [[ -n "${KEYWAY_BINARY:-}" ]]; then
   keyway_binary="$(cd "$(dirname "$KEYWAY_BINARY")" && pwd)/$(basename "$KEYWAY_BINARY")"
+  quickstart_dir="${KEYWAY_QUICKSTART_DIR:-packages/keyway_cli/example/quickstart}"
 else
-  dart compile exe packages/keyway_cli/bin/keyway.dart -o "$tmp/keyway"
-  keyway_binary="$tmp/keyway"
+  dart compile exe packages/keyway_cli/bin/keyway.dart -o "$tmp/compiled-keyway"
+  version="$(awk '$1 == "version:" { print $2 }' packages/keyway_cli/pubspec.yaml)"
+  archive="$tmp/keyway-$version-test.tar.gz"
+  ./tool/package_cli_release.sh "$tmp/compiled-keyway" "$archive"
+  ./tool/verify_cli_archive.sh "$archive" "$version"
+  mkdir "$tmp/release"
+  tar -xzf "$archive" -C "$tmp/release"
+  keyway_binary="$tmp/release/keyway"
+  quickstart_dir="$tmp/release/example/quickstart"
 fi
-quickstart_dir="${KEYWAY_QUICKSTART_DIR:-packages/keyway_cli/example/quickstart}"
 python3 tool/test_cli_quickstart.py \
   "$keyway_binary" \
   "$quickstart_dir"

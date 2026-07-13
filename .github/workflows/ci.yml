@@ -76,8 +76,9 @@ jobs:
       # Real login Keychain round-trip.
       - run: KEYWAY_INTEGRATION=1 dart test test/keychain_integration_test.dart
       - run: ./tool/test_cli_storage.sh
-      # Exact README onboarding loop against the compiled fixed-appId product.
-      # GitHub-hosted runners are disposable and start without a Keyway store.
+      # Package, verify, extract, and execute the exact README onboarding loop
+      # against the fixed-appId product. GitHub-hosted runners are disposable
+      # and start without a Keyway store.
       - run: KEYWAY_QUICKSTART=1 ./tool/test_cli_quickstart.sh
 
   integration-linux:

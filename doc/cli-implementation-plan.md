@@ -573,12 +573,16 @@ the real platform mechanism, while fakes are confined to pure command logic
 - **Integration tier:** real keystores in CI exactly like the core (macOS
   Keychain; Linux via `dbus-run-session` gnome-keyring in Docker):
   `set → run → child sees value → rm` round-trips; exec-path PATH/exit/
-  signal fidelity; cross-writer serialization (two concurrent `set`s → no
-  lost update, courtesy of the library's flock; a deliberately wedged
-  holder → `StoreBusy` as exit 75 with retry text); locked-keystore
+  signal fidelity; cross-writer serialization (eight independent compiled
+  `set` processes → every distinct name and value survives, courtesy of the
+  library's flock; a deliberately wedged holder → `StoreBusy` as exit 75 with
+  retry text); locked-keystore
   guidance path.
 - **E2E:** `tool/test_cli.sh` joining the existing `tool/` suite; the
-  README quickstart executed verbatim on both platforms.
+  native archive packaged, structurally verified, extracted, and its README
+  quickstart executed verbatim against real Keychain/Secret Service storage on
+  both platforms, including the fail-closed → set → run → remove → fail-closed
+  lifecycle.
 - **Supply chain:** the CLI's own dependency-closure snapshot test.
 
 ## 13. Phases

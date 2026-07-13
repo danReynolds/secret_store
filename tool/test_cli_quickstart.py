@@ -155,6 +155,18 @@ def main() -> int:
         if removed_again.returncode != 0 or removed_again.stdout or removed_again.stderr:
             raise AssertionError(f"second rm was not silent/idempotent: {removed_again!r}")
 
+        missing_again = run_checked([executable, "run", "--", "./app.sh"], repo)
+        if missing_again.returncode != 78:
+            raise AssertionError(
+                f"post-cleanup run exited {missing_again.returncode}: "
+                f"{missing_again.stderr}"
+            )
+        if missing_again.stdout or missing_again.stderr != expected_missing:
+            raise AssertionError(
+                "post-cleanup run did not return to the fail-closed state: "
+                f"{missing_again.stdout!r} {missing_again.stderr!r}"
+            )
+
     print("CLI README quickstart passed")
     return 0
 

@@ -38,23 +38,53 @@ sentinel="keyway-integration-value-${GITHUB_RUN_ID:-$$}"
 manifest="$tmp/.secrets.env"
 printf 'LITERAL=from-manifest\nSECRET=kw://%s\n' "$key" >"$manifest"
 
-printf 'concurrent-a' | \
-  "$tmp/keyway-integration" "$app_id" set --stdin keyway-itest/concurrent-a &
-writer_a=$!
-printf 'concurrent-b' | \
-  "$tmp/keyway-integration" "$app_id" set --stdin keyway-itest/concurrent-b &
-writer_b=$!
-wait "$writer_a"
-wait "$writer_b"
+concurrent_writers=8
+writer_pids=()
+concurrent_names=()
+for writer in $(seq 0 $((concurrent_writers - 1))); do
+  suffix="$(printf '%02d' "$writer")"
+  concurrent_names+=("CONCURRENT_$suffix")
+  printf 'CONCURRENT_%s=kw://keyway-itest/concurrent-%s\n' \
+    "$suffix" "$suffix" >>"$manifest"
+  printf 'concurrent-%s' "$suffix" | \
+    "$tmp/keyway-integration" "$app_id" set --stdin \
+      "keyway-itest/concurrent-$suffix" &
+  writer_pids+=("$!")
+done
+writer_failed=0
+for writer_pid in "${writer_pids[@]}"; do
+  if ! wait "$writer_pid"; then
+    writer_failed=1
+  fi
+done
+((writer_failed == 0)) || fail "a concurrent writer failed"
 
 set_output="$(printf '%s' "$sentinel" | \
   "$tmp/keyway-integration" "$app_id" set --stdin "$key")"
 [[ -z "$set_output" ]] || fail "set --stdin wrote unexpected output"
 
 list_output="$("$tmp/keyway-integration" "$app_id" list)"
-expected_list=$'keyway-itest/concurrent-a\nkeyway-itest/concurrent-b\nkeyway-itest/token'
+expected_list="$(
+  for writer in $(seq 0 $((concurrent_writers - 1))); do
+    printf 'keyway-itest/concurrent-%02d\n' "$writer"
+  done
+  printf 'keyway-itest/token'
+)"
 [[ "$list_output" == "$expected_list" ]] || \
   fail "list output did not contain the sorted test keys"
+
+concurrent_values="$(
+  "$tmp/keyway-integration" "$app_id" run -f "$manifest" -- \
+    /bin/sh -c 'for name do /usr/bin/printenv "$name"; done' \
+      keyway-concurrent-values "${concurrent_names[@]}"
+)"
+expected_values="$(
+  for writer in $(seq 0 $((concurrent_writers - 1))); do
+    printf 'concurrent-%02d\n' "$writer"
+  done
+)"
+[[ "$concurrent_values" == "$expected_values" ]] || \
+  fail "concurrent writes did not preserve every value"
 
 resolved="$("$tmp/keyway-integration" "$app_id" run -f "$manifest" -- \
   /usr/bin/printenv SECRET)"
@@ -95,8 +125,10 @@ holder_pid=""
 
 "$tmp/keyway-integration" "$app_id" rm "$key"
 "$tmp/keyway-integration" "$app_id" rm "$key"
-"$tmp/keyway-integration" "$app_id" rm keyway-itest/concurrent-a
-"$tmp/keyway-integration" "$app_id" rm keyway-itest/concurrent-b
+for writer in $(seq 0 $((concurrent_writers - 1))); do
+  "$tmp/keyway-integration" "$app_id" rm \
+    "keyway-itest/concurrent-$(printf '%02d' "$writer")"
+done
 
 set +e
 missing_output="$("$tmp/keyway-integration" "$app_id" run -f "$manifest" -- \
