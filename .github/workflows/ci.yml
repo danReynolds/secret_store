@@ -44,6 +44,20 @@ jobs:
       - run: dart test packages/keyway_cli -x integration
       - run: ./tool/test_cli.sh
 
+  cli-minimum-sdk:
+    if: github.event_name != 'schedule'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: dart-lang/setup-dart@65eb853c7ba17dde3be364c3d2858773e7144260 # v1.7.2
+        with:
+          sdk: 3.10.0
+      - run: dart pub get
+      # The CLI's documented SDK floor is a tested product channel, including
+      # the Dart 3.10 `dart install` spelling, not only a pubspec constraint.
+      - run: dart test packages/keyway_cli -x integration
+      - run: ./tool/test_cli.sh
+
   integration-macos:
     if: github.event_name != 'schedule'
     runs-on: macos-latest
