@@ -43,6 +43,11 @@ jobs:
       - run: dart test -x integration
       - run: dart test packages/keyway_cli -x integration
       - run: ./tool/test_cli.sh
+      # Exercise the exact package archive and warning contract before a tag.
+      # The 3.10 floor predates --ignore-warnings, so this belongs on the
+      # current-SDK Linux lane rather than cli-minimum-sdk.
+      - if: runner.os == 'Linux'
+        run: ./tool/validate_cli_publish.sh
 
   cli-minimum-sdk:
     if: github.event_name != 'schedule'

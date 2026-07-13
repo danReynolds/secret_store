@@ -99,28 +99,49 @@ void main() {
     );
   });
 
-  test('CLI source contains no network client or spawn fallback', () {
-    final roots = <Directory>[
-      Directory('${packageDirectory.path}/lib'),
-      Directory('${packageDirectory.path}/bin'),
-    ];
-    final forbidden = RegExp(
-      r'\b(?:(?:Socket|RawSocket|HttpClient|WebSocket|InternetAddress|NetworkInterface)\b|Process\.(?:run|runSync|start)\b)',
-    );
-    for (final root in roots) {
-      for (final entity in root.listSync(recursive: true)) {
-        if (entity is! File || !entity.path.endsWith('.dart')) continue;
-        expect(
-          entity.readAsStringSync(),
-          isNot(matches(forbidden)),
-          reason:
-              '${entity.path} introduces a network or spawn API; SR-8 and '
-              'SR-13 require review before adding network I/O or a second '
-              'child-execution path',
-        );
+  test(
+    'CLI source contains no network client, file writer, or spawn fallback',
+    () {
+      final roots = <Directory>[
+        Directory('${packageDirectory.path}/lib'),
+        Directory('${packageDirectory.path}/bin'),
+      ];
+      final forbidden = RegExp(
+        r'(?:\b(?:Socket|RawSocket|HttpClient|WebSocket|InternetAddress|NetworkInterface|Directory|RandomAccessFile|IOSink|Link)\b|Process\.(?:run|runSync|start)\b|FileMode\.(?:write|append|writeOnly|writeOnlyAppend)\b|\.(?:writeAsBytes|writeAsString|openWrite)(?:Sync)?\s*\()',
+      );
+      final fileConstructor = RegExp(
+        r'\bFile(?:\.(?:fromRawPath|fromUri))?\s*\(',
+      );
+      var fileConstructorCount = 0;
+      var manifestReaderFound = false;
+      for (final root in roots) {
+        for (final entity in root.listSync(recursive: true)) {
+          if (entity is! File || !entity.path.endsWith('.dart')) continue;
+          final source = entity.readAsStringSync();
+          fileConstructorCount += fileConstructor.allMatches(source).length;
+          manifestReaderFound |= source.contains(
+            'loadManifest: (path) => readManifest(File(path))',
+          );
+          expect(
+            source,
+            isNot(matches(forbidden)),
+            reason:
+                '${entity.path} introduces a network, plaintext file-write, or '
+                'spawn API; SR-2, SR-3, SR-8, and SR-13 require review before '
+                'adding that surface',
+          );
+        }
       }
-    }
-  });
+      expect(
+        fileConstructorCount,
+        1,
+        reason:
+            'the only CLI File construction must remain the selected manifest '
+            'opened by the bounded readManifest path',
+      );
+      expect(manifestReaderFound, isTrue);
+    },
+  );
 }
 
 Directory _packageDirectory() {
