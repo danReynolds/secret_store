@@ -5,6 +5,10 @@ cd "$(dirname "${BASH_SOURCE[0]}")/.."
 tmp="$(mktemp -d "${TMPDIR:-/tmp}/keyway-cli-storage.XXXXXX")"
 holder_pid=""
 app_id=""
+fail() {
+  echo "$1" >&2
+  exit 1
+}
 cleanup() {
   if [[ -n "$holder_pid" ]]; then
     kill "$holder_pid" 2>/dev/null || true
@@ -45,19 +49,21 @@ wait "$writer_b"
 
 set_output="$(printf '%s' "$sentinel" | \
   "$tmp/keyway-integration" "$app_id" set --stdin "$key")"
-[[ -z "$set_output" ]]
+[[ -z "$set_output" ]] || fail "set --stdin wrote unexpected output"
 
 list_output="$("$tmp/keyway-integration" "$app_id" list)"
 expected_list=$'keyway-itest/concurrent-a\nkeyway-itest/concurrent-b\nkeyway-itest/token'
-[[ "$list_output" == "$expected_list" ]]
+[[ "$list_output" == "$expected_list" ]] || \
+  fail "list output did not contain the sorted test keys"
 
 resolved="$("$tmp/keyway-integration" "$app_id" run -f "$manifest" -- \
   /usr/bin/printenv SECRET)"
-[[ "$resolved" == "$sentinel" ]]
+[[ "$resolved" == "$sentinel" ]] || fail "run did not resolve the stored value"
 
 literal="$("$tmp/keyway-integration" "$app_id" run -f "$manifest" -- \
   /usr/bin/printenv LITERAL)"
-[[ "$literal" == "from-manifest" ]]
+[[ "$literal" == "from-manifest" ]] || \
+  fail "run did not overlay the manifest literal"
 
 if [[ "$(uname -s)" == "Darwin" ]]; then
   lock_path="$HOME/Library/Application Support/$app_id/secrets.enc.lock"
@@ -71,7 +77,7 @@ for _ in $(seq 1 100); do
   [[ -e "$ready" ]] && break
   sleep 0.05
 done
-[[ -e "$ready" ]]
+[[ -e "$ready" ]] || fail "lock holder did not become ready"
 set +e
 busy_output="$(printf 'replacement' | \
   "$tmp/keyway-integration" "$app_id" set --stdin "$key" 2>&1)"
@@ -80,9 +86,12 @@ set -e
 kill "$holder_pid" 2>/dev/null || true
 wait "$holder_pid" 2>/dev/null || true
 holder_pid=""
-[[ $busy_status -eq 75 ]]
-[[ "$busy_output" == *"another live Keyway writer"* ]]
-[[ "$busy_output" == *"not a stale lock file"* ]]
+[[ $busy_status -eq 75 ]] || \
+  fail "live lock contention exited $busy_status, expected 75"
+[[ "$busy_output" == *"another live Keyway writer"* ]] || \
+  fail "live lock output omitted writer guidance"
+[[ "$busy_output" == *"not a stale lock file"* ]] || \
+  fail "live lock output omitted stale-file guidance"
 
 "$tmp/keyway-integration" "$app_id" rm "$key"
 "$tmp/keyway-integration" "$app_id" rm "$key"
@@ -94,9 +103,12 @@ missing_output="$("$tmp/keyway-integration" "$app_id" run -f "$manifest" -- \
   /usr/bin/true 2>&1)"
 missing_status=$?
 set -e
-[[ $missing_status -eq 78 ]]
-[[ "$missing_output" == *"keyway set $key"* ]]
-[[ "$missing_output" == *"Nothing was launched."* ]]
+[[ $missing_status -eq 78 ]] || \
+  fail "missing-reference run exited $missing_status, expected 78"
+[[ "$missing_output" == *"keyway set $key"* ]] || \
+  fail "missing-reference output omitted set remediation"
+[[ "$missing_output" == *"Nothing was launched."* ]] || \
+  fail "missing-reference output omitted atomicity notice"
 
 "$tmp/keyway-integration" "$app_id" doctor >/dev/null
 echo "CLI real-store round trip passed"

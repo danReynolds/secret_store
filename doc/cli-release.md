@@ -13,6 +13,8 @@ security and installation contract.
    - `APPLE_CERTIFICATE_P12_BASE64`
    - `APPLE_CERTIFICATE_PASSWORD`
    - `APPLE_SIGNING_IDENTITY`
+   - `APPLE_TEAM_ID` — the frozen 10-character Team ID; keep this independent
+     of the certificate secret so the verifier rejects an accidental team swap
    - `APPLE_NOTARY_KEY_P8_BASE64`
    - `APPLE_NOTARY_KEY_ID`
    - `APPLE_NOTARY_ISSUER_ID`
@@ -34,7 +36,7 @@ security and installation contract.
    Review each archive before confirming. Publish `keyway` first because
    `keyway_cli` exact-pins it. Then enable GitHub trusted publishing for
    `danReynolds/keyway`: `publish.yml` with tag pattern `v{{version}}` for the
-   core, and `publish_cli.yml` with tag pattern
+   core, and `release_cli.yml` with tag pattern
    `keyway_cli-v{{version}}` for the CLI. Both use the protected `pub.dev`
    environment.
 4. Complete Appendix B's owner actions: register `keyway.dev`, reserve the
@@ -69,14 +71,19 @@ before the first tag.
 1. Confirm the candidate commit is on `main`, ordinary CI is green on macOS
    and Linux, `packages/keyway_cli/pubspec.yaml` and `CHANGELOG.md` carry the
    release version, and the CLI's exact `keyway` pin names an already-published
-   core version.
+   core version. The release tag must be signed by a key GitHub recognizes as
+   verified; the workflow rejects lightweight or unverified tags.
 2. From a clean checkout:
 
    ```sh
    ./tool/test.sh
    ./tool/test_linux.sh
-   dart pub -C packages/keyway_cli publish --dry-run
+   ./tool/validate_cli_publish.sh
    ```
+
+   The validator permits only pub's two expected warnings for the normative
+   exact `ffi` and `keyway` pins; validation errors or any new warning fail the
+   release.
 
 3. Tag the exact reviewed commit with the package-specific tag:
 
@@ -89,11 +96,13 @@ before the first tag.
    `origin/main`. It then builds native arm64/x64 artifacts on each OS, signs
    and notarizes macOS, executes the real README quickstart, verifies archive
    contents, publishes SHA-256 sums and GitHub provenance attestations, creates
-   the GitHub release, and updates the tap formula from the actual artifact
-   hashes.
-5. Inspect the workflow logs, notary logs, release attestations, checksums, and
-   tap commit. A skipped architecture or failed post-release formula update is
-   an incomplete release, not a warning.
+   the GitHub release, updates the tap formula from the actual artifact hashes,
+   and only then publishes the CLI through pub.dev trusted publishing. A
+   native-release failure therefore cannot publish a partial CLI release.
+5. Inspect the workflow logs, the per-architecture Apple notary result and
+   issue-log artifacts, release attestations, checksums, and tap commit. A
+   skipped architecture or failed post-release formula update is an incomplete
+   release, not a warning.
 
 ## Clean-machine acceptance
 
@@ -106,7 +115,7 @@ Use fresh macOS and Ubuntu accounts with no Dart installation and no existing
 brew install danreynolds/tap/keyway
 keyway --version
 keyway doctor
-cd packages/keyway_cli/example/quickstart
+cd "$(brew --prefix keyway)/share/keyway/example/quickstart"
 cp secrets.env.example .secrets.env
 keyway run -- ./verify.sh
 keyway set acme-example/openai-api-key
@@ -121,8 +130,9 @@ only `Keyway quickstart passed.`
 ### GitHub archive on Linux
 
 Verify `SHA256SUMS` and the GitHub attestation, extract the matching Linux
-archive, place `keyway` on `PATH`, then execute the same quickstart. `doctor`
-must identify Secret Service as reachable and unlocked.
+archive, place `keyway` on `PATH`, then run the same commands from the
+archive's `example/quickstart` directory. `doctor` must identify Secret
+Service as reachable and unlocked.
 
 ### Dart-native channel
 
@@ -134,9 +144,11 @@ keyway --version
 keyway doctor
 ```
 
-Run the same quickstart and confirm `doctor` reports the actual compiled/VM
-trust unit. This channel is accepted only after installation resolves solely
-from pub.dev; a workspace or path override is not evidence.
+Download the matching release's source archive and run the same quickstart
+from `packages/keyway_cli/example/quickstart`; confirm `doctor` reports the
+actual compiled/VM trust unit. This channel is accepted only after
+installation resolves solely from pub.dev; a workspace or path override is
+not evidence.
 
 Record the OS image, architecture, install command, elapsed onboarding time,
 and command receipts for each lane. Phase 3 closes only when both no-Dart lanes

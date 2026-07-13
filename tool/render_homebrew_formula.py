@@ -74,10 +74,11 @@ def render(version: str, directory: pathlib.Path) -> str:
   def install
     bin.install "keyway"
     prefix.install "README.md"
+    pkgshare.install "example"
   end
 
   test do
-    assert_equal "keyway #{{version}}\\n", shell_output("#{{bin}}/keyway --version")
+    assert_equal "#{{version}}\\n", shell_output("#{{bin}}/keyway --version")
     assert_includes shell_output("#{{bin}}/keyway --help"), "run [-f FILE]"
   end
 end

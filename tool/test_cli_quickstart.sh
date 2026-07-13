@@ -56,6 +56,7 @@ else
   dart compile exe packages/keyway_cli/bin/keyway.dart -o "$tmp/keyway"
   keyway_binary="$tmp/keyway"
 fi
+quickstart_dir="${KEYWAY_QUICKSTART_DIR:-packages/keyway_cli/example/quickstart}"
 python3 tool/test_cli_quickstart.py \
   "$keyway_binary" \
-  packages/keyway_cli/example/quickstart
+  "$quickstart_dir"

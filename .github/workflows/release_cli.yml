@@ -20,20 +20,24 @@ jobs:
           fetch-depth: 0
       - uses: dart-lang/setup-dart@65eb853c7ba17dde3be364c3d2858773e7144260 # v1.7.2
       - name: verify tag, version, and main ancestry
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           version="${GITHUB_REF_NAME#keyway_cli-v}"
           package_version="$(awk '$1 == "version:" { print $2 }' packages/keyway_cli/pubspec.yaml)"
           test "$version" = "$package_version"
           git fetch origin main
           git merge-base --is-ancestor "$GITHUB_SHA" origin/main
+          tag_object="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$GITHUB_REF_NAME" --jq .object.sha)"
+          tag_verified="$(gh api "repos/$GITHUB_REPOSITORY/git/tags/$tag_object" --jq .verification.verified)"
+          test "$tag_verified" = "true"
       - run: dart pub get
       - run: dart format --output=none --set-exit-if-changed .
       - run: dart analyze --fatal-infos
       - run: dart test -x integration
       - run: dart test packages/keyway_cli -x integration
       - run: ./tool/test_cli.sh
-      - run: dart pub publish --dry-run
-        working-directory: packages/keyway_cli
+      - run: ./tool/validate_cli_publish.sh
 
   build-linux:
     needs: validate
@@ -49,6 +53,7 @@ jobs:
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
       - uses: dart-lang/setup-dart@65eb853c7ba17dde3be364c3d2858773e7144260 # v1.7.2
+      - run: sudo apt-get update && sudo apt-get install -y libsecret-tools gnome-keyring dbus
       - run: dart pub get
       - name: compile and package
         run: |
@@ -58,6 +63,18 @@ jobs:
           asset="artifacts/keyway-${version}-linux-${{ matrix.arch }}.tar.gz"
           ./tool/package_cli_release.sh build/cli/keyway "$asset"
           ./tool/verify_cli_archive.sh "$asset" "$version"
+          extracted="$RUNNER_TEMP/keyway-release-example-${{ matrix.arch }}"
+          mkdir -p "$extracted"
+          tar -xzf "$asset" -C "$extracted"
+          export KEYWAY_BINARY="$extracted/keyway"
+          export KEYWAY_QUICKSTART_DIR="$extracted/example/quickstart"
+          export KEYWAY_QUICKSTART=1
+          dbus-run-session -- bash -c '
+            eval "$(printf release-test | gnome-keyring-daemon --daemonize --unlock --components=secrets)"
+            export GNOME_KEYRING_CONTROL
+            export PATH=/usr/bin:/bin
+            ./tool/test_cli_quickstart.sh
+          '
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: keyway-linux-${{ matrix.arch }}
@@ -92,6 +109,7 @@ jobs:
           CERTIFICATE_P12_BASE64: ${{ secrets.APPLE_CERTIFICATE_P12_BASE64 }}
           CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
         run: |
+          umask 077
           test -n "$CERTIFICATE_P12_BASE64"
           test -n "$CERTIFICATE_PASSWORD"
           keychain="$RUNNER_TEMP/keyway-signing.keychain-db"
@@ -121,8 +139,10 @@ jobs:
       - name: Developer-ID sign and verify the frozen identity
         env:
           SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
           test -n "$SIGNING_IDENTITY"
+          test -n "$APPLE_TEAM_ID"
           for binary in build/cli/keyway build/cli/keyway-continuity; do
             codesign \
               --force \
@@ -132,7 +152,7 @@ jobs:
               --options runtime \
               --timestamp \
               "$binary"
-            ./tool/verify_macos_release.sh "$binary"
+            ./tool/verify_macos_release.sh "$binary" "$APPLE_TEAM_ID"
           done
       - name: prove signed-build Keychain access continuity
         run: |
@@ -153,6 +173,7 @@ jobs:
           NOTARY_KEY_ID: ${{ secrets.APPLE_NOTARY_KEY_ID }}
           NOTARY_ISSUER_ID: ${{ secrets.APPLE_NOTARY_ISSUER_ID }}
         run: |
+          umask 077
           test -n "$NOTARY_KEY_P8_BASE64"
           test -n "$NOTARY_KEY_ID"
           test -n "$NOTARY_ISSUER_ID"
@@ -177,21 +198,29 @@ jobs:
           # support stapling tickets to standalone binaries. spctl verifies the
           # accepted online ticket instead.
           spctl --assess --type execute --verbose=4 build/cli/keyway
-      - name: run the documented quickstart against the signed binary
-        env:
-          KEYWAY_BINARY: ${{ github.workspace }}/build/cli/keyway
-          KEYWAY_QUICKSTART: '1'
-        run: ./tool/test_cli_quickstart.sh
+          version="${GITHUB_REF_NAME#keyway_cli-v}"
+          cp "$RUNNER_TEMP/notary-result.json" \
+            "artifacts/keyway-${version}-macos-${{ matrix.arch }}.notary-result.json"
+          cp "$RUNNER_TEMP/notary-log.json" \
+            "artifacts/keyway-${version}-macos-${{ matrix.arch }}.notary-log.json"
       - name: package signed and notarized binary
         run: |
           version="${GITHUB_REF_NAME#keyway_cli-v}"
           asset="artifacts/keyway-${version}-macos-${{ matrix.arch }}.tar.gz"
           ./tool/package_cli_release.sh build/cli/keyway "$asset"
           ./tool/verify_cli_archive.sh "$asset" "$version"
+          extracted="$RUNNER_TEMP/keyway-release-example-${{ matrix.arch }}"
+          mkdir -p "$extracted"
+          tar -xzf "$asset" -C "$extracted"
+          KEYWAY_BINARY="$extracted/keyway" \
+          KEYWAY_QUICKSTART_DIR="$extracted/example/quickstart" \
+          KEYWAY_QUICKSTART=1 \
+          PATH=/usr/bin:/bin \
+            ./tool/test_cli_quickstart.sh
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: keyway-macos-${{ matrix.arch }}
-          path: artifacts/*.tar.gz
+          path: artifacts/*
           if-no-files-found: error
           retention-days: 7
       - name: clean signing material and disposable store
@@ -228,7 +257,8 @@ jobs:
       - name: checksums and Homebrew formula
         run: |
           version="${GITHUB_REF_NAME#keyway_cli-v}"
-          find dist -maxdepth 1 -type f -name '*.tar.gz' -print0 | \
+          find dist -maxdepth 1 -type f \
+            \( -name '*.tar.gz' -o -name '*.json' \) -print0 | \
             sort -z | xargs -0 sha256sum | sed 's#  dist/#  #' > dist/SHA256SUMS
           python3 tool/render_homebrew_formula.py "$version" dist dist/keyway.rb
           ruby -c dist/keyway.rb
@@ -267,3 +297,20 @@ jobs:
             args+=(-f "sha=$sha")
           fi
           gh api "${args[@]}"
+
+  publish-pub:
+    needs: publish-release
+    runs-on: ubuntu-24.04
+    environment: pub.dev
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: dart-lang/setup-dart@65eb853c7ba17dde3be364c3d2858773e7144260 # v1.7.2
+      - run: dart pub get
+        working-directory: packages/keyway_cli
+      - run: ./tool/validate_cli_publish.sh
+      - name: publish to pub.dev through GitHub OIDC
+        run: dart pub publish --force
+        working-directory: packages/keyway_cli

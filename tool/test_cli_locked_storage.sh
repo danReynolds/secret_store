@@ -5,6 +5,11 @@
 set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
+fail() {
+  echo "$1" >&2
+  exit 1
+}
+
 if [[ "$(uname -s)" != "Linux" ]]; then
   echo "CLI locked-store check is Linux-only; skipped"
   exit 0
@@ -44,10 +49,14 @@ output="$("$tmp/keyway-integration" "$app_id" list 2>&1)"
 rc=$?
 set -e
 
-[[ $rc -eq 69 ]]
-[[ "$output" == *"store key was not returned"* ]]
-[[ "$output" == *"Unlock or reconnect the OS keystore and retry first"* ]]
-[[ "$output" == *"some locked Linux providers report this state"* ]]
-[[ "$output" != *"$sentinel"* ]]
+[[ $rc -eq 69 ]] || fail "locked-store list exited $rc, expected 69"
+[[ "$output" == *"store key was not returned"* ]] || \
+  fail "locked-store output omitted the observed failure"
+[[ "$output" == *"Unlock or reconnect the OS keystore and retry first"* ]] || \
+  fail "locked-store output omitted unlock guidance"
+[[ "$output" == *"some locked Linux providers report this state"* ]] || \
+  fail "locked-store output omitted provider guidance"
+[[ "$output" != *"$sentinel"* ]] || \
+  fail "locked-store output leaked the secret sentinel"
 
 echo "CLI locked-store guidance passed"

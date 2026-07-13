@@ -41,8 +41,10 @@ trust unit. `keyway doctor` makes the runtime distinction visible.
 
 ## Quickstart
 
-The repository includes a language-neutral executable example. From
-`packages/keyway_cli/example/quickstart` run these commands exactly:
+The source package and native release archives include a language-neutral
+executable example. Use `packages/keyway_cli/example/quickstart` in a source
+checkout or `example/quickstart` in an extracted native archive, then run these
+commands exactly:
 
 ```sh
 cp secrets.env.example .secrets.env
@@ -114,8 +116,8 @@ when an application can avoid environment injection entirely.
 
 macOS and Linux desktop are supported. Headless/CI environments fail closed;
 use the CI platform's secret store there. See the
-[recovery procedure](../../doc/cli-recovery.md) before abandoning an unreadable
-store.
+[recovery procedure](https://github.com/danReynolds/keyway/blob/main/doc/cli-recovery.md)
+before abandoning an unreadable store.
 
 ## License
 

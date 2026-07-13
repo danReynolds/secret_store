@@ -3,17 +3,24 @@
 # KEYWAY_ALLOW_ADHOC=1 exists only so the structural checks can run locally.
 set -euo pipefail
 
-if [[ $# -ne 1 ]]; then
-  echo "usage: $0 KEYWAY_BINARY" >&2
+if [[ $# -lt 1 || $# -gt 2 ]]; then
+  echo "usage: $0 KEYWAY_BINARY [EXPECTED_TEAM_ID]" >&2
   exit 2
 fi
 
 binary="$1"
+expected_team="${2:-}"
 details="$(codesign -dvvv "$binary" 2>&1)"
 
 codesign --verify --strict --verbose=2 "$binary"
-[[ "$details" == *$'\nIdentifier=dev.keyway.cli\n'* ]]
-[[ "$details" == *"runtime"* ]]
+if [[ "$details" != *$'\nIdentifier=dev.keyway.cli\n'* ]]; then
+  echo "release binary does not use identifier dev.keyway.cli" >&2
+  exit 1
+fi
+if [[ "$details" != *"runtime"* ]]; then
+  echo "release binary does not enable the hardened runtime" >&2
+  exit 1
+fi
 
 entitlements="$(mktemp "${TMPDIR:-/tmp}/keyway-entitlements.XXXXXX")"
 trap 'rm -f "$entitlements"' EXIT
@@ -25,15 +32,45 @@ if [[ -s "$entitlements" ]]; then
 fi
 
 if [[ "${KEYWAY_ALLOW_ADHOC:-}" != "1" ]]; then
-  [[ "$details" == *$'\nAuthority=Developer ID Application:'* ]]
-  [[ "$details" == *$'\nTimestamp='* ]]
+  if [[ -z "$expected_team" ]]; then
+    echo "strict release verification requires the frozen Apple Team ID" >&2
+    exit 2
+  fi
+  if [[ ! "$expected_team" =~ ^[A-Z0-9]{10}$ ]]; then
+    echo "expected Apple Team ID must be 10 uppercase letters or digits" >&2
+    exit 2
+  fi
+  if [[ "$details" != *$'\nAuthority=Developer ID Application:'* ]]; then
+    echo "release binary is not signed by a Developer ID Application" >&2
+    exit 1
+  fi
+  if [[ "$details" != *$'\nTimestamp='* ]]; then
+    echo "release binary does not carry a secure timestamp" >&2
+    exit 1
+  fi
   team="$(printf '%s\n' "$details" | sed -n 's/^TeamIdentifier=//p')"
-  [[ -n "$team" && "$team" != "not set" ]]
+  if [[ -z "$team" || "$team" == "not set" ]]; then
+    echo "release binary does not carry a signing team identifier" >&2
+    exit 1
+  fi
+  if [[ "$team" != "$expected_team" ]]; then
+    echo "release binary team was '$team', expected '$expected_team'" >&2
+    exit 1
+  fi
 
   requirement="$(codesign -d -r- "$binary" 2>&1)"
-  [[ "$requirement" == *'identifier "dev.keyway.cli"'* ]]
-  [[ "$requirement" == *"anchor apple generic"* ]]
-  [[ "$requirement" == *"certificate leaf[subject.OU] = \"$team\""* ]]
+  if [[ "$requirement" != *'identifier "dev.keyway.cli"'* ]]; then
+    echo "designated requirement omitted the frozen identifier" >&2
+    exit 1
+  fi
+  if [[ "$requirement" != *"anchor apple generic"* ]]; then
+    echo "designated requirement is not anchored to Apple" >&2
+    exit 1
+  fi
+  if [[ "$requirement" != *"certificate leaf[subject.OU] = \"$team\""* ]]; then
+    echo "designated requirement omitted signing team $team" >&2
+    exit 1
+  fi
 fi
 
 echo "macOS release identity passed"
