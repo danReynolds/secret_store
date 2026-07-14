@@ -530,11 +530,11 @@ malware, root, and the child's own conduct remain out of scope at every tier.
    became available, so this channel has one documented installation spelling.
    The "any language" positioning fails if the answer to "how do I install
    it" starts with "install Dart".
-4. **Identity surface:** the existing `danReynolds/keyway` repository and the
-   two real pub.dev packages are sufficient. No custom site/domain, separate
-   GitHub organization, or placeholder package on an unused registry is part
-   of v0.1. Add another identity only when a real distribution artifact needs
-   one.
+4. **Identity surface:** the existing `danReynolds/keyway` repository, its
+   repository-hosted GitHub Pages documentation, and the two real pub.dev
+   packages are sufficient. No custom domain, separate GitHub organization, or
+   placeholder package on an unused registry is part of v0.1. Add another
+   identity only when a real distribution artifact needs one.
 
 Release train: the CLI pins the exact core version; a core release triggers a
 reviewed CLI pin-bump release. Independent CHANGELOGs; per-package tags. Pub.dev
@@ -981,9 +981,17 @@ that admits only the matching key — precisely this product: the one
 sanctioned path by which keys reach a process. Chosen over ~30 vetted
 candidates; final four:
 
+**2026-07-14 collision update.** A same-category product at
+[`keyway.sh`](https://keyway.sh/) now actively ships a `keyway` secrets CLI,
+including `keyway run`, plus its own Homebrew tap. This invalidates the earlier
+"out-of-category collision only" conclusion. The Dart package and CLI names
+remain unchanged in this implementation plan, but the owner must complete a
+fresh trademark/confusion review before the first signed release. Public docs
+use "Keyway for Dart" and state non-affiliation in the interim.
+
 | Finalist | Availability (pub / npm / brew / crates / PyPI) | Deciding factor |
 |---|---|---|
-| **keyway** ✅ | ✅ / squatted / ✅ / ✅ / squatted | Best metaphor and sound of the entire search; both squats are dead micro-projects; the brand collision (keyway.ai, AI-for-real-estate, ~$40M raised) is **out-of-category** |
+| **keyway** ✅ | ✅ / squatted / ✅ / ✅ / squatted | Best metaphor and sound in the original search; this row is superseded by the same-category collision update above. |
 | envkeep | all clean | Only true clean sweep, but permanently one letter from EnvKey — an **in-category** hosted secrets product; near-word-same-niche is the worse confusion profile |
 | kove | all clean | Ownable coined word, but meaning-free (tagline must build it) and kove.com is an enterprise software mark |
 | keyhold | clean except PyPI | Sturdy, flat; outclassed by keyway's semantics |
@@ -1005,10 +1013,11 @@ fallback scopes unless a real package for that ecosystem is approved.
 
 **Registration checklist (owner actions):** ~~rename the GitHub repo~~
 (done 2026-07-12 — `danReynolds/keyway`; pubspec updated); publish only the
-actual `keyway` and `keyway_cli` packages on pub.dev; perform a trademark
-sanity pass on "KEYWAY" for software goods. The GitHub repository is the
-canonical homepage. There is deliberately no custom site/domain, separate
-organization, or placeholder package on another registry for v0.1.
+actual `keyway` and `keyway_cli` packages on pub.dev; resolve the updated
+same-category naming review above before signing either tag. The GitHub
+repository and its repository-hosted Pages site are the canonical project
+surfaces. There is deliberately no custom domain, separate organization, or
+placeholder package on another registry for v0.1.
 
 ## Appendix C — recorded designs, not scheduled scope
 

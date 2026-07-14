@@ -1,26 +1,42 @@
-# keyway
+# Keyway for Dart
 
-Cross-platform secret storage for Dart — **pure Dart, no Flutter required**.
-One API keeps each secret in the strongest place the operating system offers:
-hardware-backed secure storage where it exists, an authenticated encrypted file
-everywhere else. It runs anywhere Dart does — command-line tools, servers, and
-Flutter apps.
+[Website](https://danreynolds.github.io/keyway/) ·
+[Architecture](doc/architecture.md) ·
+[Security policy](SECURITY.md) ·
+[![CI](https://github.com/danReynolds/keyway/actions/workflows/ci.yml/badge.svg)](https://github.com/danReynolds/keyway/actions/workflows/ci.yml)
 
-Dart didn't have this. `flutter_secure_storage` needs Flutter, so a CLI or
-server can't use it; Python, Go, and Rust each have a `keyring`. This is
-Dart's — and it reaches even Android's hardware Keystore without pulling in a
-Flutter dependency, so a headless server can still depend on it.
+Local secret storage for Dart, plus an austere CLI that can inject the same
+kind of OS-backed secrets into any process. No Flutter dependency, account,
+server, daemon, or network path is required.
 
-```sh
-dart pub add keyway
+| Surface | Use it when | Contract |
+|---|---|---|
+| **`package:keyway` SDK** | Your Dart or Flutter code can read secrets directly | Bytes-first storage through one `SecretStorage(appId:)` constructor |
+| **`keyway` CLI** | Any application already reads environment variables | Five commands and a committed manifest containing literals plus `kw://` references |
+
+> **Release candidate:** `0.1.0` has not been published to pub.dev or GitHub
+> Releases yet. The repository is the only working installation source today;
+> hosted and signed-binary commands are intentionally not presented as live.
+
+## SDK quickstart
+
+For pre-release evaluation, clone the repository and use a path dependency
+pinned to the reviewed checkout:
+
+```yaml
+dependencies:
+  keyway:
+    path: ../keyway
 ```
+
+After the signed `0.1.0` release, installation becomes `dart pub add keyway`.
 
 ```dart
 import 'package:keyway/keyway.dart';
 
 final store = SecretStorage(appId: 'com.example.myapp');
 
-await store.writeString('api_token', 's3cr3t', label: 'API token');
+await store.writeString('api_token', 's3cr3t');
 final token = await store.readString('api_token');   // 's3cr3t'
 await store.delete('api_token');
 ```
@@ -29,7 +45,7 @@ await store.delete('api_token');
 everything lives. No configuration, no footguns. Values are bytes
 (`Uint8List`) at the core, with `readString`/`writeString` for convenience.
 
-## Keyway CLI
+## CLI quickstart
 
 The separately packaged [`keyway_cli`](packages/keyway_cli) product gives any
 language the same local store through five commands: `run`, `set`, `rm`,
@@ -38,6 +54,13 @@ literal and replaces secret values with explicit, qualified `kw://`
 references. `keyway run -- COMMAND` resolves the references and replaces
 itself with exactly that command—no account, server, daemon, shell hook, or
 resident wrapper.
+
+From a source checkout, activate the current package locally:
+
+```sh
+dart pub get
+dart pub global activate --source path packages/keyway_cli
+```
 
 The CLI owns its examples under
 [`packages/keyway_cli/example`](packages/keyway_cli/example): the packaged
@@ -55,10 +78,10 @@ before decryption. Each platform link has the full breakdown.
 
 | Platform | Secrets live in | Protected by |
 |---|---|---|
-| [iOS](doc/platforms/ios.md) | native keychain items | Secure Enclave (device hardware) |
-| [macOS — app](doc/platforms/macos.md#signed-apps-entitled) | native keychain items | Secure Enclave (device hardware) |
+| [iOS](doc/platforms/ios.md) | native keychain items | Data Protection Keychain; hardware level measured |
+| [macOS — app](doc/platforms/macos.md#signed-apps-entitled) | native keychain items | Data Protection Keychain; hardware level measured |
 | [macOS — CLI](doc/platforms/macos.md#command-line-and-unentitled) | an encrypted file | key in the login Keychain |
-| [Android](doc/platforms/android.md) | an encrypted file | key sealed in hardware (Keystore — TEE / StrongBox) |
+| [Android](doc/platforms/android.md) | an encrypted file | key wrapped by Android Keystore; hardware level measured |
 | [Linux](doc/platforms/linux.md) | an encrypted file | key in the Secret Service (GNOME Keyring / KWallet) |
 
 Every row is validated end-to-end against the real platform keystore (see
@@ -83,9 +106,9 @@ own native staging buffers, which it can, but key material also transits
 GC-managed heaps — the Dart heap, and on Android the intermediate Java arrays —
 which can't be reliably zeroed and are not claimed to be); rollback to an older
 genuine container (AEAD is not anti-rollback); timing side-channels in pure-Dart
-crypto; root. Concurrent writes are **coordinated**: same-isolate handles serialize on a
-per-path FIFO mutex, and every mutating operation additionally takes an
-exclusive advisory `flock` that excludes other isolates *and* other processes
+crypto; root. Concurrent writes are **coordinated**: same-isolate handles
+serialize on a per-path FIFO mutex, and every mutating operation additionally
+takes an exclusive advisory `flock` that excludes other isolates *and* other processes
 (so a lost update, or two first-writers minting rival store keys, cannot happen
 on a filesystem that honors `flock` — local app-data storage does). There is
 **no key escrow** — lose the keystore item and you lose the store.
@@ -141,15 +164,22 @@ real keystore **code path** end-to-end, not that physical silicon mediated it.
 
 ## Status
 
-`0.1.0` is the first pub.dev release. It is pre-1.0, so the API and on-disk
-container format may still change — under pub's `^0.1.0` semantics a `0.2.0`
-may carry breaking changes. Shipping today, each validated end-to-end against
-its real keystore: macOS (CLI and entitled), Linux, iOS, and Android 12+.
-Windows and headless servers are planned and fail closed until they land.
+`0.1.0` is a pre-release candidate and has not been published. The API and
+on-disk container format may still change; once published, a future `0.2.0`
+may carry breaking changes under pub's pre-1.0 semantics. Implemented and
+validated end-to-end against the real platform path: macOS (CLI and entitled),
+Linux, iOS, and Android 12+. Windows and headless servers are planned and fail
+closed until they land.
 Report vulnerabilities per [SECURITY.md](SECURITY.md); design rationale is in
 [doc/design.md](doc/design.md) and [doc/architecture.md](doc/architecture.md),
-with a cross-ecosystem comparison in
-[doc/ecosystem-comparison.md](doc/ecosystem-comparison.md).
+with the current product comparison summarized on the
+[project website](https://danreynolds.github.io/keyway/#compare).
+
+## Project identity
+
+This repository is **Keyway for Dart**, an independent open-source project. It
+is not affiliated with the separate hosted secrets product at
+[keyway.sh](https://keyway.sh/).
 
 ## License
 

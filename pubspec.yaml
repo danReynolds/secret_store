@@ -5,6 +5,7 @@ description: >-
   authenticated encrypted file.
 version: 0.1.0
 repository: https://github.com/danReynolds/keyway
+homepage: https://danreynolds.github.io/keyway/
 issue_tracker: https://github.com/danReynolds/keyway/issues
 topics:
   - security

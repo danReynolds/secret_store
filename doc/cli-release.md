@@ -79,10 +79,10 @@ security and installation contract.
    OIDC exclusively. Do not publish `keyway_cli` yet: its first manual
    publication occurs only after the signed native release in the section
    below, because it exact-pins this now-hosted core version.
-5. Record Appendix B's trademark sanity check. Do not create a custom
-   site/domain, separate GitHub organization, or placeholder packages on
-   unused registries for v0.1. The existing repository and the two actual
-   pub.dev packages are the complete initial identity surface.
+5. Resolve Appendix B's updated trademark and same-category naming review
+   before signing the first release. The repository-hosted GitHub Pages site is
+   the documentation surface; do not add a custom domain, separate GitHub
+   organization, or placeholder packages on unused registries for v0.1.
 
 ## macOS identity and notarization
 

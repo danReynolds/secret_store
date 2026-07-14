@@ -23,22 +23,29 @@ invokes a shell or stays resident as a wrapper.
 
 ## Install
 
-The signed GitHub/Homebrew binary is the promoted channel because its stable
-macOS code identity is also part of the login-Keychain access contract:
+`0.1.0` is not published yet. From a source checkout, install the current local
+package:
 
 ```sh
-brew install danreynolds/tap/keyway
+dart pub get
+dart pub global activate --source path packages/keyway_cli
 ```
 
-Dart users can install the package directly:
+For repeated contributor runs without changing global state, use the repository
+runner documented in the [examples guide](example/README.md).
+
+The signed GitHub/Homebrew binary will be the promoted release channel because
+its stable macOS code identity is part of the login-Keychain access contract:
 
 ```sh
+# Available after the signed 0.1.0 release, not today:
+brew install danreynolds/tap/keyway
 dart install keyway_cli
 ```
 
-This builds and installs a native `keyway` executable. Dart is needed to
-install or update it, not to launch it afterward. Follow Dart's notice if its
-install-bin directory is not already on `PATH`.
+The Dart channel builds and installs a native `keyway` executable. Dart is
+needed to install or update it, not to launch it afterward. Follow Dart's
+notice if its install-bin directory is not already on `PATH`.
 
 On Linux, Keyway requires the `secret-tool` client and an unlocked desktop
 Secret Service provider. Homebrew installs its `libsecret` dependency; distro
@@ -50,9 +57,10 @@ trust unit. `keyway doctor` makes the runtime distinction visible.
 
 ## Quickstart
 
-The source package and native release archives include a language-neutral
-executable example. Use `packages/keyway_cli/example/quickstart` in a source
-checkout or `example/quickstart` in an extracted native archive. The
+The source checkout includes a language-neutral executable example; future
+native release archives will include it too. Use
+`packages/keyway_cli/example/quickstart` in a source checkout or
+`example/quickstart` in an extracted native archive. The
 [repository examples guide](https://github.com/danReynolds/keyway/tree/main/packages/keyway_cli/example)
 distinguishes an installed `keyway` from the current source checkout; choose
 one before running these commands:
@@ -143,3 +151,6 @@ before abandoning an unreadable store.
 ## License
 
 MIT.
+
+Keyway for Dart is not affiliated with the separate hosted product at
+[keyway.sh](https://keyway.sh/).

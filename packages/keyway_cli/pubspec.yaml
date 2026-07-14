@@ -2,6 +2,7 @@ name: keyway_cli
 description: Austere, local secret injection backed by Keyway.
 version: 0.1.0
 repository: https://github.com/danReynolds/keyway/tree/main/packages/keyway_cli
+homepage: https://danreynolds.github.io/keyway/#cli
 
 environment:
   sdk: ^3.10.0

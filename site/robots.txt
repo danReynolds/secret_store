@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://danreynolds.github.io/keyway/sitemap.xml

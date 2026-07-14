@@ -1,0 +1,472 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#10130f">
+    <meta name="description" content="Keyway for Dart is local, OS-backed secret storage with an austere five-command CLI for run-scoped injection.">
+    <link rel="canonical" href="https://danreynolds.github.io/keyway/">
+    <meta property="og:type" content="website">
+    <meta property="og:title" content="Keyway for Dart — secrets stay local">
+    <meta property="og:description" content="A bytes-first Dart SDK and austere local CLI backed by the operating system's keystore.">
+    <meta property="og:url" content="https://danreynolds.github.io/keyway/">
+    <meta property="og:image" content="https://opengraph.githubassets.com/keyway-site/danReynolds/keyway">
+    <meta property="og:image:alt" content="Keyway for Dart repository preview">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Keyway for Dart">
+    <meta name="twitter:description" content="Local, OS-backed secret storage for Dart and any process.">
+    <title>Keyway for Dart — secrets stay local</title>
+    <link rel="stylesheet" href="./styles.css">
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "SoftwareSourceCode",
+        "name": "Keyway for Dart",
+        "description": "Local OS-backed secret storage for Dart with an austere run-scoped injection CLI.",
+        "codeRepository": "https://github.com/danReynolds/keyway",
+        "license": "https://opensource.org/licenses/MIT",
+        "programmingLanguage": "Dart",
+        "runtimePlatform": ["macOS", "Linux", "iOS", "Android"]
+      }
+    </script>
+  </head>
+  <body>
+    <a class="skip-link" href="#main">Skip to content</a>
+
+    <header class="site-header">
+      <div class="shell nav-shell">
+        <a class="brand" href="#top" aria-label="Keyway for Dart home">
+          <span class="brand-mark" aria-hidden="true">k/</span>
+          <span>keyway</span>
+          <span class="brand-context">for Dart</span>
+        </a>
+        <nav class="nav-links" aria-label="Main navigation">
+          <a href="#sdk">SDK</a>
+          <a href="#cli">CLI</a>
+          <a href="#security">Security</a>
+          <a href="#examples">Examples</a>
+          <a href="#compare">Compare</a>
+        </nav>
+        <a class="button button-small button-ink" href="https://github.com/danReynolds/keyway">GitHub <span aria-hidden="true">↗</span></a>
+      </div>
+    </header>
+
+    <main id="main">
+      <section class="hero" id="top">
+        <div class="shell hero-grid">
+          <div class="hero-copy">
+            <div class="eyebrow"><span class="status-dot" aria-hidden="true"></span> 0.1.0 release candidate</div>
+            <h1>Secrets belong to the machine. Apps get them at runtime.</h1>
+            <p class="hero-lede">One local, OS-backed foundation. A bytes-first Dart SDK when your code can read directly, and a five-command CLI when any process needs environment variables.</p>
+            <div class="hero-actions">
+              <a class="button button-primary" href="#install">Evaluate from source</a>
+              <a class="button button-ghost" href="https://github.com/danReynolds/keyway#threat-model">Read the threat model</a>
+            </div>
+            <ul class="hero-proof" aria-label="Keyway properties">
+              <li>No account</li>
+              <li>No daemon</li>
+              <li>No network path</li>
+              <li>No plaintext secret file</li>
+            </ul>
+          </div>
+
+          <div class="terminal-wrap" aria-label="Keyway CLI example">
+            <div class="terminal-shadow" aria-hidden="true"></div>
+            <div class="terminal">
+              <div class="terminal-bar">
+                <span class="terminal-title">.secrets.env</span>
+                <span class="terminal-state">references only</span>
+              </div>
+              <pre><code><span class="code-dim"># Public configuration stays reviewable</span>
+API_URL=<span class="code-value">https://staging.example.com</span>
+
+<span class="code-dim"># Values stay in the local OS store</span>
+OPENAI_API_KEY=<span class="code-accent">kw://acme-api/openai-api-key</span>
+
+<span class="prompt">$</span> keyway set acme-api/openai-api-key
+<span class="terminal-ok">Stored.</span>
+
+<span class="prompt">$</span> keyway run -- npm start
+<span class="terminal-ok">App listening on 127.0.0.1:4242</span></code></pre>
+              <div class="terminal-foot">
+                <span>Keyway resolves, injects, then becomes the app.</span>
+                <span class="terminal-lock" aria-hidden="true">local only</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="metric-strip" aria-label="Keyway at a glance">
+        <div class="shell metric-grid">
+          <div><strong>2</strong><span>small surfaces</span></div>
+          <div><strong>5</strong><span>CLI commands</span></div>
+          <div><strong>1</strong><span>third-party runtime dependency</span></div>
+          <div><strong>0</strong><span>resident processes</span></div>
+        </div>
+      </section>
+
+      <section class="section product-section" aria-labelledby="product-title">
+        <div class="shell">
+          <div class="section-heading split-heading">
+            <div>
+              <p class="kicker">Choose the narrowest surface</p>
+              <h2 id="product-title">Direct storage or process injection.</h2>
+            </div>
+            <p>Both surfaces share the same philosophy: the mechanism belongs to Keyway, while application code gets a small, stable contract.</p>
+          </div>
+
+          <div class="product-grid">
+            <article class="product-card" id="sdk">
+              <div class="card-topline">
+                <span class="number-chip">01</span>
+                <span class="surface-chip">Dart SDK</span>
+              </div>
+              <h3>Keep secrets out of environment variables entirely.</h3>
+              <p>Use <code>SecretStorage</code> directly in Dart and Flutter. One constructor selects the strongest available platform scheme; byte values are the core API.</p>
+              <div class="code-panel">
+                <div class="code-panel-bar">
+                  <span>main.dart</span>
+                  <button class="copy-button" type="button" data-copy-target="sdk-code">Copy</button>
+                </div>
+                <pre id="sdk-code"><code><span class="code-keyword">import</span> <span class="code-value">'package:keyway/keyway.dart'</span>;
+
+<span class="code-keyword">final</span> store = SecretStorage(
+  appId: <span class="code-value">'com.example.myapp'</span>,
+);
+
+<span class="code-keyword">await</span> store.writeString(<span class="code-value">'api-token'</span>, token);
+<span class="code-keyword">final</span> value = <span class="code-keyword">await</span> store.readString(<span class="code-value">'api-token'</span>);</code></pre>
+              </div>
+              <ul class="check-list">
+                <li>Pure Dart; no Flutter plugin</li>
+                <li>Bytes-first with string conveniences</li>
+                <li>Typed, value-free failures</li>
+              </ul>
+              <a class="text-link" href="https://github.com/danReynolds/keyway#sdk-quickstart">SDK documentation <span aria-hidden="true">→</span></a>
+            </article>
+
+            <article class="product-card product-card-dark" id="cli">
+              <div class="card-topline">
+                <span class="number-chip number-chip-dark">02</span>
+                <span class="surface-chip surface-chip-dark">Local CLI</span>
+              </div>
+              <h3>Give any application ordinary environment variables.</h3>
+              <p>Commit the names and references, never the values. <code>keyway run</code> resolves everything before launch and replaces itself with the requested process.</p>
+              <div class="command-list" aria-label="Keyway CLI commands">
+                <div><code>run</code><span>resolve and launch</span></div>
+                <div><code>set</code><span>hidden input or strict stdin</span></div>
+                <div><code>rm</code><span>idempotent removal</span></div>
+                <div><code>list</code><span>qualified names only</span></div>
+                <div><code>doctor</code><span>honest backend diagnostics</span></div>
+              </div>
+              <ul class="check-list check-list-dark">
+                <li>Any language, no application dependency</li>
+                <li>One explicit manifest; no parent search</li>
+                <li>No shell hook or resident wrapper</li>
+              </ul>
+              <a class="text-link text-link-light" href="https://github.com/danReynolds/keyway/tree/main/packages/keyway_cli">CLI documentation <span aria-hidden="true">→</span></a>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section class="section flow-section" aria-labelledby="flow-title">
+        <div class="shell">
+          <div class="section-heading centered-heading">
+            <p class="kicker">The local path</p>
+            <h2 id="flow-title">A reviewable contract. A value-free repository.</h2>
+            <p>Project files say which values are needed. Each developer supplies those values to their own operating-system-backed store.</p>
+          </div>
+          <ol class="flow-grid">
+            <li>
+              <span class="flow-number">1</span>
+              <h3>Commit the contract</h3>
+              <p><code>.secrets.env</code> holds public literals and qualified <code>kw://</code> references. Review sees every environment variable your app will receive.</p>
+            </li>
+            <li>
+              <span class="flow-number">2</span>
+              <h3>Store locally</h3>
+              <p>Values go through Keychain, Secret Service, Android Keystore, or an authenticated encrypted file whose key lives in the platform keystore.</p>
+            </li>
+            <li>
+              <span class="flow-number">3</span>
+              <h3>Resolve once</h3>
+              <p>Missing references stop the launch. A complete manifest is injected into exactly one child process; Keyway does not stay in the process tree.</p>
+            </li>
+          </ol>
+        </div>
+      </section>
+
+      <section class="section security-section" id="security" aria-labelledby="security-title">
+        <div class="shell">
+          <div class="security-intro">
+            <p class="kicker kicker-light">Security posture</p>
+            <h2 id="security-title">Small surface. Loud failures. Measured claims.</h2>
+            <p>Keyway chooses one platform mechanism and reports what it actually resolved. If the required keystore is unavailable, it throws instead of quietly writing plaintext or selecting a weaker home.</p>
+            <a class="button button-light" href="https://github.com/danReynolds/keyway/blob/main/doc/design.md">Read the design</a>
+          </div>
+          <div class="security-grid">
+            <article>
+              <span class="security-glyph" aria-hidden="true">01</span>
+              <h3>Fail closed</h3>
+              <p>Unavailable, locked, invalidated, corrupt, and migration states remain distinct typed failures. Recovery is explicit.</p>
+            </article>
+            <article>
+              <span class="security-glyph" aria-hidden="true">02</span>
+              <h3>Authenticated at rest</h3>
+              <p>The file scheme uses XChaCha20-Poly1305 with HKDF-SHA256 key commitment, atomic writes, file locking, and fsync.</p>
+            </article>
+            <article>
+              <span class="security-glyph" aria-hidden="true">03</span>
+              <h3>Hardware honestly reported</h3>
+              <p>Apple and Android paths report hardware backing only after platform-specific measurement—not from platform name alone.</p>
+            </article>
+            <article>
+              <span class="security-glyph" aria-hidden="true">04</span>
+              <h3>Real platform receipts</h3>
+              <p>CI exercises macOS Keychain and Linux Secret Service. Repeatable local lanes cover iOS, Android, and entitled macOS paths.</p>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section class="section platform-section" aria-labelledby="platform-title">
+        <div class="shell">
+          <div class="section-heading split-heading">
+            <div>
+              <p class="kicker">Automatic platform resolution</p>
+              <h2 id="platform-title">One API. Platform-native protection.</h2>
+            </div>
+            <p><code>describe()</code> exposes the resolved storage shape, availability, lock state, capabilities, and measured security level.</p>
+          </div>
+          <div class="platform-table" role="table" aria-label="Platform protection matrix">
+            <div class="platform-row platform-head" role="row">
+              <span role="columnheader">Runtime</span>
+              <span role="columnheader">Storage</span>
+              <span role="columnheader">Protection</span>
+              <span role="columnheader">Status</span>
+            </div>
+            <div class="platform-row" role="row">
+              <strong role="cell">iOS</strong>
+              <span role="cell">Native Keychain items</span>
+              <span role="cell">Device-bound; hardware level measured</span>
+              <span role="cell"><span class="status-chip">supported</span></span>
+            </div>
+            <div class="platform-row" role="row">
+              <strong role="cell">macOS app</strong>
+              <span role="cell">Data Protection Keychain</span>
+              <span role="cell">Entitlement-gated; hardware level measured</span>
+              <span role="cell"><span class="status-chip">supported</span></span>
+            </div>
+            <div class="platform-row" role="row">
+              <strong role="cell">macOS CLI</strong>
+              <span role="cell">Authenticated encrypted file</span>
+              <span role="cell">File key in login Keychain</span>
+              <span role="cell"><span class="status-chip">supported</span></span>
+            </div>
+            <div class="platform-row" role="row">
+              <strong role="cell">Android 12+</strong>
+              <span role="cell">Authenticated encrypted file</span>
+              <span role="cell">File key wrapped by Android Keystore</span>
+              <span role="cell"><span class="status-chip">supported</span></span>
+            </div>
+            <div class="platform-row" role="row">
+              <strong role="cell">Linux desktop</strong>
+              <span role="cell">Authenticated encrypted file</span>
+              <span role="cell">File key in Secret Service</span>
+              <span role="cell"><span class="status-chip">supported</span></span>
+            </div>
+            <div class="platform-row platform-row-muted" role="row">
+              <strong role="cell">Windows / headless</strong>
+              <span role="cell">No silent fallback</span>
+              <span role="cell">Typed unavailable error</span>
+              <span role="cell"><span class="status-chip status-chip-planned">planned</span></span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="section install-section" id="install" aria-labelledby="install-title">
+        <div class="shell install-shell">
+          <div class="install-copy">
+            <p class="kicker">Install honestly</p>
+            <h2 id="install-title">Evaluate the reviewed source today.</h2>
+            <p>The first signed release has not been cut, so pub.dev and Homebrew commands would fail today. Clone the repository now; the release workflow is already designed for pub.dev, signed GitHub binaries, and a dedicated Homebrew tap.</p>
+            <div class="release-channels" aria-label="Planned release channels">
+              <span><strong>pub.dev</strong> after 0.1.0</span>
+              <span><strong>Homebrew</strong> after 0.1.0</span>
+              <span><strong>GitHub binaries</strong> after 0.1.0</span>
+            </div>
+          </div>
+          <div class="install-card">
+            <div class="tab-list" role="tablist" aria-label="Installation surface">
+              <button id="tab-cli" type="button" role="tab" aria-selected="true" aria-controls="panel-cli">CLI</button>
+              <button id="tab-sdk" type="button" role="tab" aria-selected="false" aria-controls="panel-sdk" tabindex="-1">SDK</button>
+            </div>
+            <div id="panel-cli" class="tab-panel" role="tabpanel" aria-labelledby="tab-cli">
+              <p>Clone, resolve the workspace, then activate the local package:</p>
+              <div class="code-panel install-code">
+                <div class="code-panel-bar"><span>shell</span><button class="copy-button" type="button" data-copy-target="cli-install-code">Copy</button></div>
+                <pre id="cli-install-code"><code>git clone https://github.com/danReynolds/keyway.git
+cd keyway
+dart pub get
+dart pub global activate --source path packages/keyway_cli
+keyway doctor</code></pre>
+              </div>
+            </div>
+            <div id="panel-sdk" class="tab-panel" role="tabpanel" aria-labelledby="tab-sdk" hidden>
+              <p>Clone a reviewed checkout, then point your application at it:</p>
+              <div class="code-panel install-code">
+                <div class="code-panel-bar"><span>pubspec.yaml</span><button class="copy-button" type="button" data-copy-target="sdk-install-code">Copy</button></div>
+                <pre id="sdk-install-code"><code>dependencies:
+  keyway:
+    path: ../keyway</code></pre>
+              </div>
+            </div>
+            <p class="install-note">Pre-release consumers should pin the exact reviewed commit. <a href="https://github.com/danReynolds/keyway/blob/main/doc/cli-release.md">See the release contract</a>.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="section examples-section" id="examples" aria-labelledby="examples-title">
+        <div class="shell">
+          <div class="section-heading split-heading">
+            <div>
+              <p class="kicker">Runnable examples</p>
+              <h2 id="examples-title">See the value cross a real process boundary.</h2>
+            </div>
+            <p>Each framework app boots for real. Visual examples intentionally show a disposable value so the injection path is obvious; never use a production credential in them.</p>
+          </div>
+          <div class="example-grid">
+            <a class="example-card" href="https://github.com/danReynolds/keyway/tree/main/packages/keyway_cli/example/quickstart">
+              <span class="example-label">Any language</span>
+              <h3>Quickstart</h3>
+              <p>A shell acceptance path that confirms availability without printing the value.</p>
+              <span class="example-link">Open example <span aria-hidden="true">↗</span></span>
+            </a>
+            <a class="example-card" href="https://github.com/danReynolds/keyway/tree/main/packages/keyway_cli/example/flutter">
+              <span class="example-label">Dart + macOS</span>
+              <h3>Flutter</h3>
+              <p>Launch a desktop window and render the disposable value inherited by the app.</p>
+              <span class="example-link">Open example <span aria-hidden="true">↗</span></span>
+            </a>
+            <a class="example-card" href="https://github.com/danReynolds/keyway/tree/main/packages/keyway_cli/example/rails">
+              <span class="example-label">Ruby</span>
+              <h3>Rails</h3>
+              <p>Boot Puma on loopback and display escaped configuration through a real controller.</p>
+              <span class="example-link">Open example <span aria-hidden="true">↗</span></span>
+            </a>
+            <a class="example-card" href="https://github.com/danReynolds/keyway/tree/main/packages/keyway_cli/example/node">
+              <span class="example-label">JavaScript</span>
+              <h3>Node</h3>
+              <p>Start a dependency-free loopback web app with security headers and an injected value.</p>
+              <span class="example-link">Open example <span aria-hidden="true">↗</span></span>
+            </a>
+          </div>
+        </div>
+      </section>
+
+      <section class="section comparison-section" id="compare" aria-labelledby="compare-title">
+        <div class="shell">
+          <div class="section-heading split-heading">
+            <div>
+              <p class="kicker">Context, not a scorecard</p>
+              <h2 id="compare-title">Use Keyway when less machinery is the feature.</h2>
+            </div>
+            <p>Keyway is intentionally not a universal secrets platform. These tools solve adjacent jobs well; the right choice depends on whether you need local rigor, provider portability, team administration, or encrypted files.</p>
+          </div>
+          <div class="comparison-table" role="table" aria-label="Contextual secrets tool comparison">
+            <div class="comparison-row comparison-head" role="row">
+              <span role="columnheader">Tool</span>
+              <span role="columnheader">Best fit</span>
+              <span role="columnheader">Model</span>
+              <span role="columnheader">What you choose</span>
+            </div>
+            <div class="comparison-row comparison-keyway" role="row">
+              <strong role="cell">Keyway for Dart</strong>
+              <span role="cell">Local Dart storage and simple run-scoped injection</span>
+              <span role="cell">One automatic OS-backed store per platform</span>
+              <span role="cell">Small surface over provider choice, profiles, sync, and team controls</span>
+            </div>
+            <div class="comparison-row" role="row">
+              <strong role="cell"><a href="https://secretspec.dev/">SecretSpec <span aria-hidden="true">↗</span></a></strong>
+              <span role="cell">One declaration across profiles, providers, and languages</span>
+              <span role="cell">11 pluggable local and hosted providers</span>
+              <span role="cell">Breadth, generation, auditing, and migration with a larger configuration surface</span>
+            </div>
+            <div class="comparison-row" role="row">
+              <strong role="cell"><a href="https://www.1password.dev/cli/reference/commands/run">1Password CLI <span aria-hidden="true">↗</span></a></strong>
+              <span role="cell">Teams already using a centralized 1Password vault</span>
+              <span role="cell"><code>op://</code> references resolved from an account or service identity</span>
+              <span role="cell">Sharing, policy, and administration instead of a local-only dependency-free path</span>
+            </div>
+            <div class="comparison-row" role="row">
+              <strong role="cell"><a href="https://pub.dev/packages/flutter_secure_storage">flutter_secure_storage <span aria-hidden="true">↗</span></a></strong>
+              <span role="cell">Flutter apps needing broad platforms and biometric or accessibility controls</span>
+              <span role="cell">Configurable Flutter plugin with platform-specific options</span>
+              <span role="cell">More platform breadth and knobs instead of pure Dart and a standalone CLI</span>
+            </div>
+            <div class="comparison-row" role="row">
+              <strong role="cell"><a href="https://dotenvx.com/">dotenvx <span aria-hidden="true">↗</span></a></strong>
+              <span role="cell">Portable encrypted <code>.env</code> workflows across local, CI, and deploys</span>
+              <span role="cell">Encrypted values committed while private keys stay separate</span>
+              <span role="cell">Repository portability instead of values that never enter project history</span>
+            </div>
+          </div>
+          <p class="comparison-source">Comparison language is based on each project's current first-party documentation, linked above. Last reviewed July 2026.</p>
+        </div>
+      </section>
+
+      <section class="section docs-section" aria-labelledby="docs-title">
+        <div class="shell docs-shell">
+          <div>
+            <p class="kicker kicker-light">Audit the decisions</p>
+            <h2 id="docs-title">Security claims should have somewhere to go.</h2>
+            <p>Keyway keeps design rationale, platform behavior, recovery, and limitations next to the source—not behind a sales form.</p>
+          </div>
+          <div class="docs-links">
+            <a href="https://github.com/danReynolds/keyway/blob/main/doc/architecture.md"><span>Architecture</span><span aria-hidden="true">↗</span></a>
+            <a href="https://github.com/danReynolds/keyway/blob/main/doc/design.md"><span>Cryptography & design</span><span aria-hidden="true">↗</span></a>
+            <a href="https://github.com/danReynolds/keyway#threat-model"><span>Threat model</span><span aria-hidden="true">↗</span></a>
+            <a href="https://github.com/danReynolds/keyway/tree/main/doc/platforms"><span>Platform notes</span><span aria-hidden="true">↗</span></a>
+            <a href="https://github.com/danReynolds/keyway/blob/main/doc/cli-recovery.md"><span>CLI recovery</span><span aria-hidden="true">↗</span></a>
+            <a href="https://github.com/danReynolds/keyway/security/policy"><span>Report a vulnerability</span><span aria-hidden="true">↗</span></a>
+          </div>
+        </div>
+      </section>
+
+      <section class="closing-section" aria-labelledby="closing-title">
+        <div class="shell closing-card">
+          <div>
+            <p class="kicker">Open source · MIT</p>
+            <h2 id="closing-title">Read the source before you trust the store.</h2>
+            <p>Start with the public API, follow the platform path, and run the same real-keystore tests used by the project.</p>
+          </div>
+          <div class="closing-actions">
+            <a class="button button-primary" href="https://github.com/danReynolds/keyway">View on GitHub</a>
+            <a class="button button-ghost" href="https://github.com/danReynolds/keyway/issues">Open an issue</a>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <div class="shell footer-shell">
+        <div>
+          <a class="brand footer-brand" href="#top"><span class="brand-mark" aria-hidden="true">k/</span><span>keyway</span><span class="brand-context">for Dart</span></a>
+          <p>Local secret storage with fewer moving parts.</p>
+        </div>
+        <div class="footer-links">
+          <a href="https://github.com/danReynolds/keyway">GitHub</a>
+          <a href="https://github.com/danReynolds/keyway/blob/main/LICENSE">MIT License</a>
+          <a href="https://github.com/danReynolds/keyway/blob/main/SECURITY.md">Security</a>
+        </div>
+        <p class="identity-note">Independent project. Not affiliated with the separate hosted product at <a href="https://keyway.sh/">keyway.sh</a>.</p>
+      </div>
+    </footer>
+
+    <div class="copy-status" role="status" aria-live="polite"></div>
+    <script src="./site.js"></script>
+  </body>
+</html>
