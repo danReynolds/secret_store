@@ -15,9 +15,9 @@ Then, from this directory:
 
 ```sh
 bundle install
-keyway run -- bundle exec rails runner script/check_configuration.rb
+keyway run -- bin/rails runner script/check_configuration.rb
 keyway set demo-rails/stripe-secret-key
-keyway run -- bundle exec rails runner script/check_configuration.rb
+keyway run -- bin/rails runner script/check_configuration.rb
 ```
 
 The first run fails closed before Rails boots. Enter any disposable value at
@@ -27,12 +27,6 @@ the hidden prompt. The second run prints:
 Keyway Rails demo booted on Rails 8.1.3.
   PAYMENTS_API_URL: https://payments.example.com
   STRIPE_SECRET_KEY: available (value not printed)
-```
-
-The same boundary applies to a full application:
-
-```sh
-keyway run -- bin/rails server
 ```
 
 After the demo:

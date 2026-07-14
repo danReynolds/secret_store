@@ -4,22 +4,6 @@ cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
 tmp="$(mktemp -d "${TMPDIR:-/tmp}/keyway-cli-test.XXXXXX")"
 trap 'rm -rf "$tmp"' EXIT
-repo="$PWD"
-
-# The dev launcher follows source through a symlink and preserves the project
-# directory instead of changing into the Keyway checkout.
-mkdir -p "$tmp/dev-project"
-printf 'KEYWAY_DEV_MARKER=from-caller-project\n' > \
-  "$tmp/dev-project/.secrets.env"
-ln -s "$repo/tool/keyway-dev" "$tmp/keyway-dev"
-dev_output="$(
-  cd "$tmp/dev-project"
-  "$tmp/keyway-dev" run -- /usr/bin/printenv KEYWAY_DEV_MARKER
-)"
-[[ "$dev_output" == "from-caller-project" ]] || {
-  echo "keyway-dev did not preserve the caller project directory" >&2
-  exit 1
-}
 
 dart compile exe packages/keyway_cli/bin/keyway.dart -o "$tmp/keyway"
 dart compile exe packages/keyway_cli/tool/prompt_harness.dart \

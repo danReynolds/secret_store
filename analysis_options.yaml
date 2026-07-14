@@ -1,13 +1,12 @@
 include: package:lints/recommended.yaml
 
 analyzer:
-  # example_flutter/ is a separate package (Flutter host app for the mobile +
-  # desktop integration tiers) with its own analysis_options + flutter_lints.
-  # The root `dart analyze` job resolves only this package (no Flutter SDK), so
-  # its Flutter imports would fail to resolve here — analyze it via
-  # `flutter analyze` in its own dir, not from the root context.
+  # These are separate Flutter packages with their own analysis options. The
+  # root `dart analyze` job resolves only this Dart package (no Flutter SDK),
+  # so analyze each with `flutter analyze` from its own directory.
   exclude:
     - example_flutter/**
+    - demo/flutter/**
   language:
     strict-casts: true
     strict-inference: true

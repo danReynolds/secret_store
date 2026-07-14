@@ -47,19 +47,6 @@ Source-checkout demos in [`demo`](demo) show the same CLI contract around a
 Flutter widget test, a Rails runner, and a Node service. The applications read
 ordinary environment variables and have no Keyway dependency.
 
-When developing from a checkout, `tool/keyway-dev` runs the latest source
-through the Dart VM while preserving the caller's working directory:
-
-```sh
-/path/to/keyway/tool/keyway-dev run -- your-command
-```
-
-It may be symlinked into any directory already on `PATH` as `keyway-dev`.
-Unlike `dart install`, it follows the next source edit without reinstalling.
-It is deliberately a development channel: `doctor` reports the shared Dart VM
-as the macOS Keychain trust unit. Signed native releases remain the promoted
-end-user channel.
-
 ## How your secrets are protected
 
 `SecretStorage(appId:)` picks the scheme for you and is **fail-closed**: with

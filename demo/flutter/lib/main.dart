@@ -6,9 +6,9 @@ void main() => runApp(KeywayDemoApp(environment: Platform.environment));
 
 class KeywayDemoApp extends StatelessWidget {
   KeywayDemoApp({required Map<String, String> environment, super.key})
-    : apiBaseUrl = environment['API_BASE_URL'] ?? '',
-      apiTokenAvailable =
-          environment['FLUTTER_DEMO_API_TOKEN']?.isNotEmpty ?? false;
+      : apiBaseUrl = environment['API_BASE_URL'] ?? '',
+        apiTokenAvailable =
+            environment['FLUTTER_DEMO_API_TOKEN']?.isNotEmpty ?? false;
 
   final String apiBaseUrl;
   final bool apiTokenAvailable;
