@@ -147,27 +147,45 @@ void main() {
       await expectLater(be.write('k', b([1])), throwsA(isA<KeystoreLocked>()));
     });
 
+    test('SystemKeySource.describe checks presence without reading the key',
+        () async {
+      final src =
+          SystemKeySource(service: 'svc', api: _GetMustNotBeCalledApi());
+      final status = await src.describe();
+      expect(status.present, isTrue);
+      expect(status.available, isTrue);
+    });
+
     test(
-        'SystemKeySource.describe never throws: a failing presence read is '
+        'SystemKeySource.describe never throws: a failing presence check is '
         'reported in detail', () async {
-      // The probe says healthy but the presence get() itself fails — the
-      // shape of a mangled stored value (e.g. invalid base64 in the keyring)
-      // or the keystore locking between probe and get. Diagnostics must
-      // degrade, not raise.
-      final src = SystemKeySource(service: 'svc', api: _GetFailsApi());
+      // The probe says healthy but the keystore locks between it and the
+      // attributes-only presence check. Diagnostics must degrade, not raise.
+      final src = SystemKeySource(service: 'svc', api: _ExistsFailsApi());
       final status = await src.describe(); // must not throw
       expect(status.present, isFalse);
       expect(status.available, isTrue);
-      expect(status.detail, contains('mangled'));
+      expect(status.detail, contains('locked during presence check'));
     });
   });
 }
 
-/// Probe reports healthy, but the presence read itself fails.
-class _GetFailsApi extends FakeKeystoreApi {
+/// A key exists, but fetching its value would be an error for diagnostics.
+class _GetMustNotBeCalledApi extends FakeKeystoreApi {
+  @override
+  Future<bool> exists(String service, String account) async => true;
+
   @override
   Future<Uint8List?> get(String service, String account) async {
-    throw const KeystoreOperationFailed('stored value was mangled');
+    throw StateError('describe() must not read the key value');
+  }
+}
+
+/// Probe reports healthy, but the attributes-only presence check fails.
+class _ExistsFailsApi extends FakeKeystoreApi {
+  @override
+  Future<bool> exists(String service, String account) async {
+    throw const KeystoreLocked('locked during presence check');
   }
 }
 

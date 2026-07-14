@@ -202,11 +202,12 @@ final class SystemKeySource implements KeySource {
     var detail = p.detail;
     if (p.available && !p.locked) {
       try {
-        present = await _api.get(service, account) != null;
+        // Diagnostics need only existence. Keep the key out of process memory
+        // and avoid prompting hardware-gated keychains to decrypt it.
+        present = await _api.exists(service, account);
       } on SecretStoreException catch (e) {
-        // Diagnostics never throw: a failed presence read (a mangled stored
-        // value, or the keystore locking between the probe and this get) is
-        // reported in `detail` instead of escaping a describe() call.
+        // Diagnostics never throw: the keystore can lock between the probe and
+        // this attributes-only check, so report the failure in `detail`.
         detail = detail == null ? e.message : '$detail; ${e.message}';
       }
     }
