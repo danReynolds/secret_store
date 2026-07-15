@@ -4,11 +4,11 @@ library;
 import 'dart:convert';
 import 'dart:typed_data';
 
-import 'package:keyway/keyway.dart';
+import 'package:keybay/keybay.dart';
 // The Linux binding and the subprocess runner are internal (not exported);
 // their unit tests reach them directly.
-import 'package:keyway/src/ffi/process_runner.dart';
-import 'package:keyway/src/ffi/secret_service.dart';
+import 'package:keybay/src/ffi/process_runner.dart';
+import 'package:keybay/src/ffi/secret_service.dart';
 import 'package:test/test.dart';
 
 /// Scripted [ProcessRunner]: records calls and returns canned outcomes, so the
@@ -100,7 +100,7 @@ void main() {
   test('set defaults the label', () async {
     final runner = ScriptedRunner((a, s) => ok(''));
     await SecretToolApi(runner: runner).set('svc', 'acct', b([9, 9]));
-    expect(runner.calls.single.sublist(0, 3), ['store', '--label', 'keyway']);
+    expect(runner.calls.single.sublist(0, 3), ['store', '--label', 'keybay']);
     expect(runner.stdins.single, base64.encode([9, 9]));
   });
 

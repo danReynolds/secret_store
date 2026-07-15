@@ -24,20 +24,20 @@ dart pub get >/dev/null
 dbus-run-session -- bash -c '
   eval "$(printf itest | gnome-keyring-daemon --daemonize --unlock --components=secrets)"
   export GNOME_KEYRING_CONTROL
-  KEYWAY_INTEGRATION=1 dart test test/secret_service_integration_test.dart
+  KEYBAY_INTEGRATION=1 dart test test/secret_service_integration_test.dart
   ./tool/test_cli_storage.sh
-  CI=true KEYWAY_QUICKSTART=1 ./tool/test_cli_quickstart.sh
-  KEYWAY_BENCHMARK=1 KEYWAY_BENCHMARK_ITERATIONS=100 \
+  CI=true KEYBAY_QUICKSTART=1 ./tool/test_cli_quickstart.sh
+  KEYBAY_BENCHMARK=1 KEYBAY_BENCHMARK_ITERATIONS=100 \
     ./tool/benchmark_cli.sh
 '
 
 # The locked-collection tier, in its OWN session (it locks the login collection
 # and can't unlock it again) — the same second step CI runs. The container is
-# exactly the throwaway session KEYWAY_LOCKED_TEST demands.
+# exactly the throwaway session KEYBAY_LOCKED_TEST demands.
 dbus-run-session -- bash -c '
   eval "$(printf itest | gnome-keyring-daemon --daemonize --unlock --components=secrets)"
   export GNOME_KEYRING_CONTROL
-  KEYWAY_INTEGRATION=1 KEYWAY_LOCKED_TEST=1 dart test test/secret_service_locked_integration_test.dart
+  KEYBAY_INTEGRATION=1 KEYBAY_LOCKED_TEST=1 dart test test/secret_service_locked_integration_test.dart
 '
 
 # The CLI guidance is a separate contract from the library's raw API behavior.
@@ -45,6 +45,6 @@ dbus-run-session -- bash -c '
 dbus-run-session -- bash -c '
   eval "$(printf itest | gnome-keyring-daemon --daemonize --unlock --components=secrets)"
   export GNOME_KEYRING_CONTROL
-  KEYWAY_LOCKED_TEST=1 ./tool/test_cli_locked_storage.sh
+  KEYBAY_LOCKED_TEST=1 ./tool/test_cli_locked_storage.sh
 '
 INNER

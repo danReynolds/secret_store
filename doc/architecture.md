@@ -1,4 +1,4 @@
-# keyway — architecture
+# keybay — architecture
 
 The canonical, current-state architecture. (History and the reasoning behind
 individual choices live in `design.md`; this is the austere summary of where we

@@ -1,4 +1,4 @@
-# keyway — security & best-practice research agenda
+# keybay — security & best-practice research agenda
 
 Input for a deep research pass over the package as of `ba8b918`. Each item says
 what to research, why (tied to the code as it stands), and what a good answer
@@ -310,8 +310,6 @@ rollback/locking decisions, and anything they all do that this package doesn't
 - `KeystoreBackend.contains` materializes the value via `get` despite the seam
   doc promising avoidance where possible (backend.dart:60-61) — macOS could
   query attributes-only; Linux could too.
-- macOS `set` applies no default label while Linux defaults to
-  `'secret_store'` — harmless inconsistency, pick one.
 - `deleteAll` round-trips every secret's *value* through memory just to get
   keys — wants a keys-only enumeration on the seam.
 

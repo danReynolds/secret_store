@@ -1,13 +1,13 @@
-# example_flutter — keyway integration harness
+# example_flutter — keybay integration harness
 
-Not a demo app. This is `keyway`'s living, runnable proof that the package
+Not a demo app. This is `keybay`'s living, runnable proof that the package
 works from inside a real Flutter app bundle against the **real** platform
 keystore on each mobile/desktop target — the coverage a pure-Dart CLI test can't
 reach — and the reference for the Android backup-exclusion rules.
 
 ## What it exercises
 
-`integration_test/keyway_test.dart` runs `SecretStorage(appId:)` end to
+`integration_test/keybay_test.dart` runs `SecretStorage(appId:)` end to
 end — full round-trip (bytes, strings, labels, enumeration, idempotent delete),
 shared backing across two instances, unicode values — and asserts that the
 per-platform resolver picked the scheme and security level that environment must

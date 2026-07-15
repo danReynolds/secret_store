@@ -4,13 +4,13 @@ library;
 import 'dart:io';
 import 'dart:typed_data';
 
-import 'package:keyway/keyway.dart';
+import 'package:keybay/keybay.dart';
 // The concrete backends are internal (not exported); their unit tests reach
 // them directly.
-import 'package:keyway/src/backends/encrypted_file_backend.dart';
-import 'package:keyway/src/backends/keystore_backend.dart';
-import 'package:keyway/src/ffi/keystore_api.dart';
-import 'package:keyway/src/key_source.dart';
+import 'package:keybay/src/backends/encrypted_file_backend.dart';
+import 'package:keybay/src/backends/keystore_backend.dart';
+import 'package:keybay/src/ffi/keystore_api.dart';
+import 'package:keybay/src/key_source.dart';
 import 'package:test/test.dart';
 
 /// In-memory [KeystoreApi] fake: models (service, account) -> bytes with upsert

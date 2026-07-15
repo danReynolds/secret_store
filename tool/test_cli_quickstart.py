@@ -98,14 +98,14 @@ def run_checked(arguments: list[str], cwd: str) -> subprocess.CompletedProcess[s
 
 def main() -> int:
     if len(sys.argv) != 3:
-        print(f"usage: {sys.argv[0]} KEYWAY QUICKSTART_DIR", file=sys.stderr)
+        print(f"usage: {sys.argv[0]} KEYBAY QUICKSTART_DIR", file=sys.stderr)
         return 2
 
     executable = os.path.abspath(sys.argv[1])
     source = os.path.abspath(sys.argv[2])
-    secret = f"keyway-quickstart-secret-{os.getpid()}".encode()
+    secret = f"keybay-quickstart-secret-{os.getpid()}".encode()
 
-    with tempfile.TemporaryDirectory(prefix="keyway-quickstart-example.") as tmp:
+    with tempfile.TemporaryDirectory(prefix="keybay-quickstart-example.") as tmp:
         repo = os.path.join(tmp, "quickstart")
         shutil.copytree(source, repo)
         shutil.copyfile(
@@ -119,7 +119,7 @@ def main() -> int:
         expected_missing = (
             "error: 1 of 1 reference in ./.secrets.env is not set on this machine:\n"
             "\n"
-            f"  keyway set {KEY}\n"
+            f"  keybay set {KEY}\n"
             "\n"
             "Nothing was launched.\n"
         )
@@ -135,7 +135,7 @@ def main() -> int:
         if success.returncode != 0:
             raise AssertionError(f"second run exited {success.returncode}: {success.stderr}")
         expected_success = (
-            "Keyway example app started.\n"
+            "Keybay example app started.\n"
             "  API_URL: https://staging.example.com\n"
             "  OPENAI_API_KEY: available (value not printed)\n"
         )

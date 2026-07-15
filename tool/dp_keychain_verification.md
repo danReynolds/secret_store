@@ -86,10 +86,10 @@ The permanent harness is `example_flutter/` — no throwaway app.
 
    ```sh
    cd example_flutter
-   flutter test integration_test/keyway_test.dart -d macos \
+   flutter test integration_test/keybay_test.dart -d macos \
      --dart-define=EXPECT_SCHEME=native \
      --dart-define=EXPECT_LEVEL=hardware \
-     --dart-define=APP_ID=com.example.keywayHarness.native
+     --dart-define=APP_ID=com.example.keybayHarness.native
    ```
 
    Expected: **All tests passed!** The first test (`resolver picked the scheme +

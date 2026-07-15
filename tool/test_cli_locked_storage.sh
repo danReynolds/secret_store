@@ -15,26 +15,26 @@ if [[ "$(uname -s)" != "Linux" ]]; then
   exit 0
 fi
 
-if [[ "${KEYWAY_LOCKED_TEST:-}" != "1" ]]; then
+if [[ "${KEYBAY_LOCKED_TEST:-}" != "1" ]]; then
   echo "refusing to lock a real login keyring" >&2
-  echo "run only in a disposable dbus-run-session with KEYWAY_LOCKED_TEST=1" >&2
+  echo "run only in a disposable dbus-run-session with KEYBAY_LOCKED_TEST=1" >&2
   exit 2
 fi
 
-tmp="$(mktemp -d "${TMPDIR:-/tmp}/keyway-cli-locked.XXXXXX")"
-app_id="keyway-cli-locked-itest-${GITHUB_RUN_ID:-$$}"
+tmp="$(mktemp -d "${TMPDIR:-/tmp}/keybay-cli-locked.XXXXXX")"
+app_id="keybay-cli-locked-itest-${GITHUB_RUN_ID:-$$}"
 cleanup() {
   rm -rf "$tmp"
   rm -rf "${XDG_DATA_HOME:-$HOME/.local/share}/$app_id"
 }
 trap cleanup EXIT
 
-dart compile exe packages/keyway_cli/tool/integration_harness.dart \
-  -o "$tmp/keyway-integration"
+dart compile exe packages/keybay_cli/tool/integration_harness.dart \
+  -o "$tmp/keybay-integration"
 
-sentinel="keyway-locked-value-${GITHUB_RUN_ID:-$$}"
+sentinel="keybay-locked-value-${GITHUB_RUN_ID:-$$}"
 printf '%s' "$sentinel" | \
-  "$tmp/keyway-integration" "$app_id" set --stdin keyway-itest/token
+  "$tmp/keybay-integration" "$app_id" set --stdin keybay-itest/token
 
 dbus-send \
   --session \
@@ -45,7 +45,7 @@ dbus-send \
   array:objpath:/org/freedesktop/secrets/collection/login >/dev/null
 
 set +e
-output="$("$tmp/keyway-integration" "$app_id" list 2>&1)"
+output="$("$tmp/keybay-integration" "$app_id" list 2>&1)"
 rc=$?
 set -e
 

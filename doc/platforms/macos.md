@@ -1,4 +1,4 @@
-# keyway on macOS
+# keybay on macOS
 
 macOS has two schemes. The library picks one automatically — once per process,
 deterministically, and never by silently degrading.

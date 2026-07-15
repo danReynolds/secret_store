@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Build the publishable core package without embedding the CLI workspace
 # member. Dart applies a workspace root's `.pubignore` to its members, so the
-# root cannot exclude `packages/` directly without emptying keyway_cli's
+# root cannot exclude `packages/` directly without emptying keybay_cli's
 # archive. Instead, publish the core from this exact, auditable allowlist and
 # remove repository-only workspace metadata from the staged pubspec.
 set -euo pipefail

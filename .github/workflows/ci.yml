@@ -41,7 +41,7 @@ jobs:
       # Unit tier (hermetic): crypto vectors, container/fuzz, POSIX perms,
       # backend logic over fakes, and the dependency-closure firewall.
       - run: dart test -x integration
-      - run: dart test packages/keyway_cli/test -x integration
+      - run: dart test packages/keybay_cli/test -x integration
       - run: ./tool/test_cli.sh
       # Exercise the exact package archive and warning contract before a tag.
       # The 3.10 floor predates --ignore-warnings, so this belongs on the
@@ -49,7 +49,7 @@ jobs:
       - if: runner.os == 'Linux'
         run: |
           ./tool/validate_publish.sh . cryptography ffi
-          ./tool/validate_publish.sh packages/keyway_cli ffi keyway
+          ./tool/validate_publish.sh packages/keybay_cli ffi keybay
 
   cli-minimum-sdk:
     if: github.event_name != 'schedule'
@@ -63,8 +63,8 @@ jobs:
       # The CLI's documented SDK floor is a tested product channel, including
       # AOT/exec/PTY behavior, not only a pubspec constraint. Dart 3.10's
       # hosted-only install proof follows first publication (release runbook).
-      - run: dart test packages/keyway_cli/test -x integration
-      - run: KEYWAY_SKIP_DART_INSTALL=1 ./tool/test_cli.sh
+      - run: dart test packages/keybay_cli/test -x integration
+      - run: KEYBAY_SKIP_DART_INSTALL=1 ./tool/test_cli.sh
 
   integration-macos:
     if: github.event_name != 'schedule'
@@ -74,12 +74,12 @@ jobs:
       - uses: dart-lang/setup-dart@65eb853c7ba17dde3be364c3d2858773e7144260 # v1.7.2
       - run: dart pub get
       # Real login Keychain round-trip.
-      - run: KEYWAY_INTEGRATION=1 dart test test/keychain_integration_test.dart
+      - run: KEYBAY_INTEGRATION=1 dart test test/keychain_integration_test.dart
       - run: ./tool/test_cli_storage.sh
       # Package, verify, extract, and execute the exact README onboarding loop
       # against the fixed-appId product. GitHub-hosted runners are disposable
-      # and start without a Keyway store.
-      - run: KEYWAY_QUICKSTART=1 ./tool/test_cli_quickstart.sh
+      # and start without a Keybay store.
+      - run: KEYBAY_QUICKSTART=1 ./tool/test_cli_quickstart.sh
 
   integration-linux:
     if: github.event_name != 'schedule'
@@ -95,14 +95,14 @@ jobs:
       # ~/.local/share is intentionally NOT pre-created — the resolver e2e test
       # exercises the clean-account path where the library creates it (0700).
       - run: |
-          KEYWAY_BENCHMARK_OUTPUT="$RUNNER_TEMP/cli-benchmark-linux.json" \
+          KEYBAY_BENCHMARK_OUTPUT="$RUNNER_TEMP/cli-benchmark-linux.json" \
           dbus-run-session -- bash -c '
             eval "$(printf itest | gnome-keyring-daemon --daemonize --unlock --components=secrets)"
             export GNOME_KEYRING_CONTROL
-            KEYWAY_INTEGRATION=1 dart test test/secret_service_integration_test.dart
+            KEYBAY_INTEGRATION=1 dart test test/secret_service_integration_test.dart
             ./tool/test_cli_storage.sh
-            KEYWAY_QUICKSTART=1 ./tool/test_cli_quickstart.sh
-            KEYWAY_BENCHMARK=1 KEYWAY_BENCHMARK_ITERATIONS=100 \
+            KEYBAY_QUICKSTART=1 ./tool/test_cli_quickstart.sh
+            KEYBAY_BENCHMARK=1 KEYBAY_BENCHMARK_ITERATIONS=100 \
               ./tool/benchmark_cli.sh
           '
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
@@ -116,7 +116,7 @@ jobs:
       # isolating it keeps it from stranding the unlocked tier above. It pins
       # that a locked keyring degrades to "not found" on reads and that delete()
       # fails CLOSED (KeystoreLocked) rather than reporting a removal that
-      # didn't happen. KEYWAY_LOCKED_TEST is the second opt-in that keeps
+      # didn't happen. KEYBAY_LOCKED_TEST is the second opt-in that keeps
       # `-t integration` on a real desktop from locking the developer's own
       # login keyring — only throwaway sessions (here, tool/test_linux.sh) set
       # it.
@@ -124,7 +124,7 @@ jobs:
           dbus-run-session -- bash -c '
             eval "$(printf itest | gnome-keyring-daemon --daemonize --unlock --components=secrets)"
             export GNOME_KEYRING_CONTROL
-            KEYWAY_INTEGRATION=1 KEYWAY_LOCKED_TEST=1 dart test test/secret_service_locked_integration_test.dart
+            KEYBAY_INTEGRATION=1 KEYBAY_LOCKED_TEST=1 dart test test/secret_service_locked_integration_test.dart
           '
       # The CLI has its own locked-store contract: exit 69, actionable text,
       # and no secret in diagnostics. Keep it in a third disposable session
@@ -133,21 +133,46 @@ jobs:
           dbus-run-session -- bash -c '
             eval "$(printf itest | gnome-keyring-daemon --daemonize --unlock --components=secrets)"
             export GNOME_KEYRING_CONTROL
-            KEYWAY_LOCKED_TEST=1 ./tool/test_cli_locked_storage.sh
+            KEYBAY_LOCKED_TEST=1 ./tool/test_cli_locked_storage.sh
           '
 
-  # osv-scanner-action ships as a REUSABLE WORKFLOW, not a step action; the
-  # old `uses: google/osv-scanner-action@v1` step was a dangling reference
-  # (the repo has no v1 tag).
+  # Keep the scan in this workflow instead of calling Google's reusable one:
+  # that workflow contains a tag-pinned download-artifact step, which violates
+  # this repository's full-SHA action policy even when the reusable workflow
+  # itself is pinned. Scanner findings flow through the reporter so a SARIF is
+  # uploaded even when the required check fails on a vulnerability.
   supply-chain:
+    name: supply-chain / osv-scan
+    runs-on: ubuntu-latest
     permissions:
       contents: read
       actions: read
       security-events: write # SARIF upload
-    uses: google/osv-scanner-action/.github/workflows/osv-scanner-reusable.yml@9a498708959aeaef5ef730655706c5a1df1edbc2 # v2.3.8
-    with:
-      scan-args: |-
-        --lockfile=./pubspec.lock
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+      - name: scan dependency lockfile
+        uses: google/osv-scanner-action/osv-scanner-action@8dc09193bb540e09b23da07ad7e30bd33bf87018 # v2.3.8
+        with:
+          scan-args: |-
+            --output=results.json
+            --format=json
+            --lockfile=./pubspec.lock
+        continue-on-error: true
+      - name: report findings and fail on vulnerabilities
+        uses: google/osv-scanner-action/osv-reporter-action@8dc09193bb540e09b23da07ad7e30bd33bf87018 # v2.3.8
+        with:
+          scan-args: |-
+            --output=results.sarif
+            --new=results.json
+            --gh-annotations=false
+            --fail-on-vuln=true
+      - name: upload findings to code scanning
+        if: ${{ !cancelled() }}
+        uses: github/codeql-action/upload-sarif@cdefb33c0f6224e58673d9004f47f7cb3e328b89 # v4.31.10
+        with:
+          sarif_file: results.sarif
 
   # The exact-pinned crypto dependency is deliberately frozen; this canary
   # fails the build when pub.dev publishes anything newer so the bump is a

@@ -1,6 +1,6 @@
 # Security policy
 
-`keyway` stores credential material. Please treat vulnerabilities
+`keybay` stores credential material. Please treat vulnerabilities
 accordingly.
 
 ## Reporting

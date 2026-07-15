@@ -1,4 +1,4 @@
-# Keyway CLI release runbook
+# Keybay CLI release runbook
 
 This is the operational companion to
 [cli-implementation-plan.md](cli-implementation-plan.md) Phase 3. A release is
@@ -41,11 +41,11 @@ security and installation contract.
 3. Create the public `danReynolds/homebrew-tap` repository with a `main`
    branch and a `Formula/` directory. The release workflow refuses to publish
    before it can read this repository; after the GitHub release exists it
-   writes only `Formula/keyway.rb`. Treat the tap as a code-distribution trust
+   writes only `Formula/keybay.rb`. Treat the tap as a code-distribution trust
    root: keep it formula-only apart from a short README, add no collaborators,
    require linear history, and disallow force pushes and branch deletion. The
    fine-grained `HOMEBREW_TAP_TOKEN` is its only automated writer and has no
-   access to the Keyway source repository. A pull-request-only rule is not used
+   access to the Keybay source repository. A pull-request-only rule is not used
    on the tap because the approval-gated release job deliberately commits the
    generated, hash-pinned formula directly; the fresh Homebrew acceptance job
    then installs and exercises that public commit before pub.dev publication.
@@ -53,7 +53,7 @@ security and installation contract.
    Push the signed core tag first:
 
    ```sh
-   git tag -s v0.1.0 -m "keyway 0.1.0"
+   git tag -s v0.1.0 -m "keybay 0.1.0"
    git push origin v0.1.0
    ```
 
@@ -73,14 +73,14 @@ security and installation contract.
    ```
 
    Review the archive before confirming. Then enable GitHub trusted publishing
-   for `keyway` from `danReynolds/keyway`, workflow `publish.yml`, tag pattern
+   for `keybay` from `danReynolds/keybay`, workflow `publish.yml`, tag pattern
    `v{{version}}`, requiring the `pub.dev` environment. Remove the two explicit
    `v0.1.0` bootstrap conditions from `publish.yml`; later core releases use
-   OIDC exclusively. Do not publish `keyway_cli` yet: its first manual
+   OIDC exclusively. Do not publish `keybay_cli` yet: its first manual
    publication occurs only after the signed native release in the section
    below, because it exact-pins this now-hosted core version.
-5. Resolve Appendix B's updated trademark and same-category naming review
-   before signing the first release. The repository-hosted GitHub Pages site is
+5. Confirm Appendix B's naming and registry availability record before signing
+   the first release. The repository-hosted GitHub Pages site is
    the documentation surface; do not add a custom domain, separate GitHub
    organization, or placeholder packages on unused registries for v0.1.
 
@@ -88,7 +88,7 @@ security and installation contract.
 
 Every release binary is independently checked for:
 
-- identifier `dev.keyway.cli`;
+- identifier `io.github.danreynolds.keybay.cli`;
 - Developer ID Application authority and a secure timestamp;
 - hardened-runtime flag;
 - no entitlements;
@@ -109,8 +109,8 @@ on 2026-07-13; offline-first installer distribution is not a v1 requirement.
 ## Cut a CLI release
 
 1. Confirm the candidate commit is on `main`, ordinary CI is green on macOS
-   and Linux, `packages/keyway_cli/pubspec.yaml` and `CHANGELOG.md` carry the
-   release version, and the CLI's exact `keyway` pin names an already-published
+   and Linux, `packages/keybay_cli/pubspec.yaml` and `CHANGELOG.md` carry the
+   release version, and the CLI's exact `keybay` pin names an already-published
    core version. The release tag must be signed by a key GitHub recognizes as
    verified; the workflow rejects lightweight or unverified tags.
 2. From a clean checkout:
@@ -119,11 +119,11 @@ on 2026-07-13; offline-first installer distribution is not a v1 requirement.
    ./tool/test.sh
    ./tool/test_linux.sh
    ./tool/validate_publish.sh . cryptography ffi
-   ./tool/validate_publish.sh packages/keyway_cli ffi keyway
+   ./tool/validate_publish.sh packages/keybay_cli ffi keybay
    ```
 
    The validator permits only pub's expected warnings for the normative exact
-   pins (`cryptography` and `ffi` in the core; `ffi` and `keyway` in the CLI).
+   pins (`cryptography` and `ffi` in the core; `ffi` and `keybay` in the CLI).
    For the core, it builds and validates the same clean-checkout staging form
    used by automated publishing: an explicit package allowlist with no CLI
    sources or repository-only workspace metadata. The CLI is validated from
@@ -134,8 +134,8 @@ on 2026-07-13; offline-first installer distribution is not a v1 requirement.
 3. Tag the exact reviewed commit with the package-specific tag:
 
    ```sh
-   git tag -s keyway_cli-v0.1.0 -m "keyway_cli 0.1.0"
-   git push origin keyway_cli-v0.1.0
+   git tag -s keybay_cli-v0.1.0 -m "keybay_cli 0.1.0"
+   git push origin keybay_cli-v0.1.0
    ```
 
 4. The release workflow rejects a version mismatch or a tag not contained in
@@ -158,15 +158,15 @@ on 2026-07-13; offline-first installer distribution is not a v1 requirement.
    clean checkout and publish the CLI's first version manually:
 
    ```sh
-   git checkout --detach keyway_cli-v0.1.0
-   ./tool/validate_publish.sh packages/keyway_cli ffi keyway
-   dart pub -C packages/keyway_cli publish
+   git checkout --detach keybay_cli-v0.1.0
+   ./tool/validate_publish.sh packages/keybay_cli ffi keybay
+   dart pub -C packages/keybay_cli publish
    ```
 
    Review the archive before confirming. Then enable GitHub trusted publishing
-   for `keyway_cli` from `danReynolds/keyway`, workflow `release_cli.yml`, tag
-   pattern `keyway_cli-v{{version}}`, requiring the `pub.dev` environment.
-   Remove the two explicit `keyway_cli-v0.1.0` bootstrap conditions from
+   for `keybay_cli` from `danReynolds/keybay`, workflow `release_cli.yml`, tag
+   pattern `keybay_cli-v{{version}}`, requiring the `pub.dev` environment.
+   Remove the two explicit `keybay_cli-v0.1.0` bootstrap conditions from
    `release_cli.yml`; later CLI releases publish through OIDC only. The first
    release is not complete until this manual publication and the hosted-install
    receipt below succeed.
@@ -176,21 +176,21 @@ on 2026-07-13; offline-first installer distribution is not a v1 requirement.
 The release workflow automatically exercises the published Homebrew and Linux
 archive channels on fresh runners without setting up Dart. Complete the same
 acceptance once in fresh macOS and Ubuntu user accounts with no Dart installation
-and no existing `keyway-cli` store; those physical receipts catch image-specific
+and no existing `keybay-cli` store; those physical receipts catch image-specific
 assumptions that hosted runners cannot.
 
 ### Homebrew on macOS
 
 ```sh
-brew install danreynolds/tap/keyway
-keyway --version
-keyway doctor
-cd "$(brew --prefix keyway)/share/keyway/example/quickstart"
+brew install danreynolds/tap/keybay
+keybay --version
+keybay doctor
+cd "$(brew --prefix keybay)/share/keybay/example/quickstart"
 cp secrets.env.example .secrets.env
-keyway run -- ./app.sh
-keyway set acme-example/openai-api-key
-keyway run -- ./app.sh
-keyway rm acme-example/openai-api-key
+keybay run -- ./app.sh
+keybay set acme-example/openai-api-key
+keybay run -- ./app.sh
+keybay rm acme-example/openai-api-key
 ```
 
 The first `run` must exit 78 and print the exact `set` remediation without
@@ -201,7 +201,7 @@ the literal URL and report the secret as available without printing its value.
 
 Install the distro's `secret-tool` client (`libsecret-tools` on Debian/Ubuntu)
 and use an unlocked desktop Secret Service provider. Verify `SHA256SUMS` and
-the GitHub attestation, extract the matching Linux archive, place `keyway` on
+the GitHub attestation, extract the matching Linux archive, place `keybay` on
 `PATH`, then run the same commands from the archive's `example/quickstart`
 directory. `doctor` must identify Secret Service as reachable and unlocked.
 
@@ -210,13 +210,13 @@ directory. `doctor` must identify Secret Service as reachable and unlocked.
 From a separate clean account with Dart 3.10 or newer:
 
 ```sh
-dart install keyway_cli
-keyway --version
-keyway doctor
+dart install keybay_cli
+keybay --version
+keybay doctor
 ```
 
 Download the matching release's source archive and run the same quickstart
-from `packages/keyway_cli/example/quickstart`; confirm `doctor` reports the
+from `packages/keybay_cli/example/quickstart`; confirm `doctor` reports the
 actual compiled/VM trust unit. This channel is accepted only after
 installation resolves solely from pub.dev; a workspace or path override is
 not evidence.

@@ -1,6 +1,6 @@
-# keyway — ecosystem comparison & benchmark
+# keybay — ecosystem comparison & benchmark
 
-How `keyway` compares to best-in-class secret storage across the
+How `keybay` compares to best-in-class secret storage across the
 ecosystems it borrows from: its own peer class (Rust/Python/Go keyring
 libraries, credential helpers), the Dart/Flutter incumbent
 (`flutter_secure_storage`), the React Native / Expo stack, and native
@@ -10,7 +10,7 @@ databases). This is a living benchmark, not a one-time audit — the "gaps" and
 "flags" sections are the actionable output.
 
 **One-line verdict.** On architecture and the file-container path,
-`keyway` is at or ahead of every peer surveyed — it is the *only* one
+`keybay` is at or ahead of every peer surveyed — it is the *only* one
 that combines authenticated encryption, key commitment, atomic writes, and
 `fsync`, and its fail-closed + never-leak-values discipline beats the mainstream
 tools. Where it is behind is never the crypto or the robustness; it is **API
@@ -394,11 +394,11 @@ A**). Key store → wrap a key around app-stored ciphertext (**Model B**).
   Right for *user-owned, cross-device* secrets; not for transparent app
   credential storage.
 - **Agent model (a fourth framing):** ssh-agent / gpg-agent keep keys in one
-  in-memory daemon that clients query. keyway's stance: the OS keystore
+  in-memory daemon that clients query. keybay's stance: the OS keystore
   *is* that agent (securityd, gnome-keyring), so we delegate to it (A) or wrap
   it (B) rather than run our own.
 
-**Where keyway lands — and why it's correct.** The per-platform resolver
+**Where keybay lands — and why it's correct.** The per-platform resolver
 composes **both** — there is no public knob (`SecretStorage(appId:)` is the whole
 surface; A-vs-B is the library's decision, not the caller's). That is not a
 hedge; it's the platform-correct mapping, because best practice *is* "A where the

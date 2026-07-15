@@ -13,7 +13,7 @@ fi
 package_directory="$1"
 shift
 expected_warning_count="$#"
-output="$(mktemp "${TMPDIR:-/tmp}/keyway-publish.XXXXXX")"
+output="$(mktemp "${TMPDIR:-/tmp}/keybay-publish.XXXXXX")"
 core_stage=""
 cleanup() {
   rm -f "$output"
@@ -24,7 +24,7 @@ cleanup() {
 trap cleanup EXIT
 
 if [[ "$package_directory" == "." ]]; then
-  core_stage="$(mktemp -d "${TMPDIR:-/tmp}/keyway-core-publish.XXXXXX")"
+  core_stage="$(mktemp -d "${TMPDIR:-/tmp}/keybay-core-publish.XXXXXX")"
   rmdir "$core_stage"
   ./tool/stage_core_publish.sh "$core_stage"
   package_directory="$core_stage"

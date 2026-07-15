@@ -5,9 +5,9 @@ library;
 import 'dart:io';
 import 'dart:typed_data';
 
-import 'package:keyway/keyway.dart' show SecretStorage;
-import 'package:keyway/src/backend.dart';
-import 'package:keyway/src/ffi/secret_service.dart';
+import 'package:keybay/keybay.dart' show SecretStorage;
+import 'package:keybay/src/backend.dart';
+import 'package:keybay/src/ffi/secret_service.dart';
 import 'package:test/test.dart';
 
 /// Exercises the REAL Linux Secret Service via `secret-tool` against a live
@@ -19,14 +19,14 @@ import 'package:test/test.dart';
 /// (see .github/workflows/ci.yml). Locally on Linux:
 ///   dbus-run-session -- bash -c '
 ///     eval "$(printf pw | gnome-keyring-daemon --daemonize --unlock --components=secrets)"
-///     KEYWAY_INTEGRATION=1 dart test test/secret_service_integration_test.dart'
+///     KEYBAY_INTEGRATION=1 dart test test/secret_service_integration_test.dart'
 void main() {
-  final envEnabled = Platform.environment['KEYWAY_INTEGRATION'] == '1';
+  final envEnabled = Platform.environment['KEYBAY_INTEGRATION'] == '1';
   final skip =
-      envEnabled ? false : 'set KEYWAY_INTEGRATION=1 (Linux, unlocked keyring)';
+      envEnabled ? false : 'set KEYBAY_INTEGRATION=1 (Linux, unlocked keyring)';
 
   final api = SecretToolApi();
-  const service = 'ca.danreynolds.keyway.itest';
+  const service = 'ca.danreynolds.keybay.itest';
 
   Uint8List bytes(List<int> v) => Uint8List.fromList(v);
 

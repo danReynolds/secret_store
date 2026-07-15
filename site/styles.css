@@ -1065,7 +1065,7 @@ h3 {
   text-underline-offset: 4px;
 }
 
-.comparison-keyway {
+.comparison-keybay {
   background: var(--accent-wash);
 }
 
@@ -1176,12 +1176,6 @@ h3 {
   display: flex;
   align-items: start;
   gap: 22px;
-}
-
-.identity-note {
-  grid-column: 1 / -1;
-  padding-top: 24px;
-  border-top: 1px solid var(--line);
 }
 
 .copy-status {
@@ -1478,7 +1472,7 @@ h3 {
     content: "What you choose";
   }
 
-  .comparison-keyway {
+  .comparison-keybay {
     background: var(--accent-wash);
   }
 

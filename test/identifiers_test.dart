@@ -1,7 +1,7 @@
 @Tags(['unit'])
 library;
 
-import 'package:keyway/src/identifiers.dart';
+import 'package:keybay/src/identifiers.dart';
 import 'package:test/test.dart';
 
 void main() {

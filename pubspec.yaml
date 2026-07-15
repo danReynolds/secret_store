@@ -1,12 +1,12 @@
-name: keyway
+name: keybay
 description: >-
   Secret storage for Dart without Flutter: each secret in the OS keystore
   (macOS/iOS Keychain, Linux Secret Service, Android Keystore) or an
   authenticated encrypted file.
 version: 0.1.0
-repository: https://github.com/danReynolds/keyway
-homepage: https://danreynolds.github.io/keyway/
-issue_tracker: https://github.com/danReynolds/keyway/issues
+repository: https://github.com/danReynolds/keybay
+homepage: https://danreynolds.github.io/keybay/
+issue_tracker: https://github.com/danReynolds/keybay/issues
 topics:
   - security
   - secrets
@@ -18,7 +18,7 @@ environment:
   sdk: ^3.6.0
 
 workspace:
-  - packages/keyway_cli
+  - packages/keybay_cli
 
 # Dependency policy (doc/design.md §10): exactly one third-party runtime dependency,
 # exact-pinned, its transitive closure entirely dart-lang official. A

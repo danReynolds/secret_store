@@ -44,11 +44,11 @@ jobs:
       - run: dart pub get
       - run: ./tool/validate_publish.sh . cryptography ffi
       - name: stage core package without workspace-only files
-        run: ./tool/stage_core_publish.sh "$RUNNER_TEMP/keyway-core-publish"
+        run: ./tool/stage_core_publish.sh "$RUNNER_TEMP/keybay-core-publish"
       - name: record manual first-publication bootstrap
         if: github.ref_name == 'v0.1.0'
         run: |
-          echo "::notice title=Manual pub.dev bootstrap required::Publish keyway 0.1.0 manually from this signed tag, then enable trusted publishing. See doc/cli-release.md."
+          echo "::notice title=Manual pub.dev bootstrap required::Publish keybay 0.1.0 manually from this signed tag, then enable trusted publishing. See doc/cli-release.md."
           {
             echo "### Manual pub.dev bootstrap required"
             echo
@@ -57,5 +57,5 @@ jobs:
       - name: publish to pub.dev through GitHub OIDC
         if: github.ref_name != 'v0.1.0'
         run: |
-          cd "$RUNNER_TEMP/keyway-core-publish"
+          cd "$RUNNER_TEMP/keybay-core-publish"
           dart pub publish --force

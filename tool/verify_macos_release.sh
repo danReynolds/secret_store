@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # Verify the frozen code-identity contract. Strict mode is the release gate;
-# KEYWAY_ALLOW_ADHOC=1 exists only so the structural checks can run locally.
+# KEYBAY_ALLOW_ADHOC=1 exists only so the structural checks can run locally.
 set -euo pipefail
 
 if [[ $# -lt 1 || $# -gt 2 ]]; then
-  echo "usage: $0 KEYWAY_BINARY [EXPECTED_TEAM_ID]" >&2
+  echo "usage: $0 KEYBAY_BINARY [EXPECTED_TEAM_ID]" >&2
   exit 2
 fi
 
@@ -13,8 +13,8 @@ expected_team="${2:-}"
 details="$(codesign -dvvv "$binary" 2>&1)"
 
 codesign --verify --strict --verbose=2 "$binary"
-if [[ "$details" != *$'\nIdentifier=dev.keyway.cli\n'* ]]; then
-  echo "release binary does not use identifier dev.keyway.cli" >&2
+if [[ "$details" != *$'\nIdentifier=io.github.danreynolds.keybay.cli\n'* ]]; then
+  echo "release binary does not use identifier io.github.danreynolds.keybay.cli" >&2
   exit 1
 fi
 if [[ "$details" != *"runtime"* ]]; then
@@ -22,7 +22,7 @@ if [[ "$details" != *"runtime"* ]]; then
   exit 1
 fi
 
-entitlements="$(mktemp "${TMPDIR:-/tmp}/keyway-entitlements.XXXXXX")"
+entitlements="$(mktemp "${TMPDIR:-/tmp}/keybay-entitlements.XXXXXX")"
 trap 'rm -f "$entitlements"' EXIT
 codesign -d --entitlements - "$binary" >"$entitlements" 2>/dev/null
 if [[ -s "$entitlements" ]]; then
@@ -31,7 +31,7 @@ if [[ -s "$entitlements" ]]; then
   exit 1
 fi
 
-if [[ "${KEYWAY_ALLOW_ADHOC:-}" != "1" ]]; then
+if [[ "${KEYBAY_ALLOW_ADHOC:-}" != "1" ]]; then
   if [[ -z "$expected_team" ]]; then
     echo "strict release verification requires the frozen Apple Team ID" >&2
     exit 2
@@ -59,7 +59,7 @@ if [[ "${KEYWAY_ALLOW_ADHOC:-}" != "1" ]]; then
   fi
 
   requirement="$(codesign -d -r- "$binary" 2>&1)"
-  if [[ "$requirement" != *'identifier "dev.keyway.cli"'* ]]; then
+  if [[ "$requirement" != *'identifier "io.github.danreynolds.keybay.cli"'* ]]; then
     echo "designated requirement omitted the frozen identifier" >&2
     exit 1
   fi

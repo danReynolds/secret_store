@@ -1,7 +1,7 @@
 // Minimal host app: shows which storage scheme the resolver picked on this
 // platform/build. The real coverage lives in integration_test/.
 import 'package:flutter/material.dart';
-import 'package:keyway/keyway.dart';
+import 'package:keybay/keybay.dart';
 
 void main() => runApp(const _HarnessApp());
 
@@ -9,7 +9,7 @@ class _HarnessApp extends StatelessWidget {
   const _HarnessApp();
 
   Future<String> _describe() async {
-    final store = SecretStorage(appId: 'com.example.keywayHarness');
+    final store = SecretStorage(appId: 'com.example.keybayHarness');
     final info = await store.backend.describe();
     return '${info.scheme.name}\nlevel: ${info.level?.name}\n${info.detail ?? ''}';
   }
@@ -18,7 +18,7 @@ class _HarnessApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       home: Scaffold(
-        appBar: AppBar(title: const Text('keyway harness')),
+        appBar: AppBar(title: const Text('keybay harness')),
         body: Center(
           child: FutureBuilder<String>(
             future: _describe(),

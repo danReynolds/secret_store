@@ -188,7 +188,7 @@ final class SystemKeySource implements KeySource {
   @override
   Future<Uint8List> create() async {
     final key = generateStoreKey();
-    await _api.set(service, account, key, label: label ?? 'keyway key');
+    await _api.set(service, account, key, label: label ?? 'keybay key');
     return key;
   }
 

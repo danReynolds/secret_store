@@ -1,6 +1,6 @@
-# keyway — design
+# keybay — design
 
-The canonical design document for `keyway`. It reflects the package as it
+The canonical design document for `keybay`. It reflects the package as it
 is, with the reasoning behind the choices that aren't obvious. (It originated as
 RFC 0005 in the dune_cli repo — the pathfinding consumer — and moved here when
 the package was extracted.)
@@ -15,7 +15,7 @@ encrypted file. The community answer, `flutter_secure_storage`, is a Flutter
 plugin (platform channels): unusable from a CLI or a server. Python, Go, and
 Rust each have a `keyring` library; Dart did not.
 
-`keyway` fills that gap: pure Dart + FFI, no platform channels, so it runs
+`keybay` fills that gap: pure Dart + FFI, no platform channels, so it runs
 in CLIs, servers, and Flutter apps alike. It ships backends for macOS, Linux,
 iOS, and Android (12 / API 31+).
 
@@ -284,7 +284,7 @@ magic "DSS1" | version u8 | cipher u8 | keyCommit(32)
 ```
 
 The `secret_store:` prefix in the two HKDF info strings is a frozen wire-format
-constant predating the package's rename to `keyway` and is never rebranded —
+constant predating the package's rename to `keybay` and is never rebranded —
 deriving with different info strings re-keys every existing container, so any
 change would be a container-format version bump.
 
@@ -596,7 +596,7 @@ Non-obvious things the build settled:
 ## 12. Decision log
 
 - Standalone package (name `secret_store`; `lockbox` was the runner-up).
-  (Renamed `keyway` 2026-07-12, pre-publish — never released as `secret_store`;
+  (Renamed `keybay` 2026-07-15, pre-publish — never released as `secret_store`;
   naming record in cli-implementation-plan.md Appendix B. The container's HKDF
   info strings keep the frozen `secret_store:` wire prefix — §7.)
 - macOS = direct `SecItem` FFI (an earlier `security`-CLI sketch was dropped: its

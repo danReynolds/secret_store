@@ -1,9 +1,9 @@
-# Keyway for Dart
+# Keybay for Dart
 
-[Website](https://danreynolds.github.io/keyway/) ·
+[Website](https://danreynolds.github.io/keybay/) ·
 [Architecture](doc/architecture.md) ·
 [Security policy](SECURITY.md) ·
-[![CI](https://github.com/danReynolds/keyway/actions/workflows/ci.yml/badge.svg)](https://github.com/danReynolds/keyway/actions/workflows/ci.yml)
+[![CI](https://github.com/danReynolds/keybay/actions/workflows/ci.yml/badge.svg)](https://github.com/danReynolds/keybay/actions/workflows/ci.yml)
 
 Local secret storage for Dart, plus an austere CLI that can inject the same
 kind of OS-backed secrets into any process. No Flutter dependency, account,
@@ -11,8 +11,8 @@ server, daemon, or network path is required.
 
 | Surface | Use it when | Contract |
 |---|---|---|
-| **`package:keyway` SDK** | Your Dart or Flutter code can read secrets directly | Bytes-first storage through one `SecretStorage(appId:)` constructor |
-| **`keyway` CLI** | Any application already reads environment variables | Five commands and a committed manifest containing literals plus `kw://` references |
+| **`package:keybay` SDK** | Your Dart or Flutter code can read secrets directly | Bytes-first storage through one `SecretStorage(appId:)` constructor |
+| **`keybay` CLI** | Any application already reads environment variables | Five commands and a committed manifest containing literals plus `kb://` references |
 
 > **Release candidate:** `0.1.0` has not been published to pub.dev or GitHub
 > Releases yet. The repository is the only working installation source today;
@@ -25,14 +25,14 @@ pinned to the reviewed checkout:
 
 ```yaml
 dependencies:
-  keyway:
-    path: ../keyway
+  keybay:
+    path: ../keybay
 ```
 
-After the signed `0.1.0` release, installation becomes `dart pub add keyway`.
+After the signed `0.1.0` release, installation becomes `dart pub add keybay`.
 
 ```dart
-import 'package:keyway/keyway.dart';
+import 'package:keybay/keybay.dart';
 
 final store = SecretStorage(appId: 'com.example.myapp');
 
@@ -47,11 +47,11 @@ everything lives. No configuration, no footguns. Values are bytes
 
 ## CLI quickstart
 
-The separately packaged [`keyway_cli`](packages/keyway_cli) product gives any
+The separately packaged [`keybay_cli`](packages/keybay_cli) product gives any
 language the same local store through five commands: `run`, `set`, `rm`,
 `list`, and `doctor`. A committed mixed manifest keeps ordinary configuration
-literal and replaces secret values with explicit, qualified `kw://`
-references. `keyway run -- COMMAND` resolves the references and replaces
+literal and replaces secret values with explicit, qualified `kb://`
+references. `keybay run -- COMMAND` resolves the references and replaces
 itself with exactly that command—no account, server, daemon, shell hook, or
 resident wrapper.
 
@@ -59,13 +59,13 @@ From a source checkout, activate the current package locally:
 
 ```sh
 dart pub get
-dart pub global activate --source path packages/keyway_cli
+dart pub global activate --source path packages/keybay_cli
 ```
 
 The CLI owns its examples under
-[`packages/keyway_cli/example`](packages/keyway_cli/example): the packaged
+[`packages/keybay_cli/example`](packages/keybay_cli/example): the packaged
 language-neutral quickstart plus Flutter, Rails, and Node workflows. The
-applications read ordinary environment variables and have no Keyway
+applications read ordinary environment variables and have no Keybay
 dependency. The quickstart is exercised against real macOS and Linux stores
 in CI.
 
@@ -173,13 +173,7 @@ closed until they land.
 Report vulnerabilities per [SECURITY.md](SECURITY.md); design rationale is in
 [doc/design.md](doc/design.md) and [doc/architecture.md](doc/architecture.md),
 with the current product comparison summarized on the
-[project website](https://danreynolds.github.io/keyway/#compare).
-
-## Project identity
-
-This repository is **Keyway for Dart**, an independent open-source project. It
-is not affiliated with the separate hosted secrets product at
-[keyway.sh](https://keyway.sh/).
+[project website](https://danreynolds.github.io/keybay/#compare).
 
 ## License
 

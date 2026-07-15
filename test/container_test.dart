@@ -4,9 +4,9 @@ library;
 import 'dart:math';
 import 'dart:typed_data';
 
-import 'package:keyway/src/container/container.dart';
-import 'package:keyway/src/container/tlv.dart';
-import 'package:keyway/src/errors.dart';
+import 'package:keybay/src/container/container.dart';
+import 'package:keybay/src/container/tlv.dart';
+import 'package:keybay/src/errors.dart';
 import 'package:test/test.dart';
 
 void main() {

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Measure compiled Keyway run overhead against the same child directly."""
+"""Measure compiled Keybay run overhead against the same child directly."""
 
 from __future__ import annotations
 
@@ -43,11 +43,11 @@ def main() -> int:
     harness, app_id, manifest, raw_iterations = sys.argv[1:]
     iterations = int(raw_iterations)
     child = ["/usr/bin/true"]
-    keyway = [harness, app_id, "run", "-f", manifest, "--", *child]
+    keybay = [harness, app_id, "run", "-f", manifest, "--", *child]
 
-    elapsed_ms(keyway)
+    elapsed_ms(keybay)
     baseline = [elapsed_ms(child) for _ in range(iterations)]
-    samples = [elapsed_ms(keyway) for _ in range(iterations)]
+    samples = [elapsed_ms(keybay) for _ in range(iterations)]
     baseline_median = statistics.median(baseline)
     overhead = [max(0.0, sample - baseline_median) for sample in samples]
     result = {

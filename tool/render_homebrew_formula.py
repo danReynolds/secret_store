@@ -27,7 +27,7 @@ def sha256(path: pathlib.Path) -> str:
 
 
 def asset(version: str, os_name: str, arch: str) -> str:
-    return f"keyway-{version}-{os_name}-{arch}.tar.gz"
+    return f"keybay-{version}-{os_name}-{arch}.tar.gz"
 
 
 def stanza(version: str, directory: pathlib.Path, os_name: str, arch: str) -> str:
@@ -36,8 +36,8 @@ def stanza(version: str, directory: pathlib.Path, os_name: str, arch: str) -> st
     if not path.is_file():
         raise FileNotFoundError(f"missing release artifact: {path}")
     url = (
-        "https://github.com/danReynolds/keyway/releases/download/"
-        f"keyway_cli-v{version}/{filename}"
+        "https://github.com/danReynolds/keybay/releases/download/"
+        f"keybay_cli-v{version}/{filename}"
     )
     return f'      url "{url}"\n      sha256 "{sha256(path)}"'
 
@@ -49,9 +49,9 @@ def render(version: str, directory: pathlib.Path) -> str:
         (os_name, arch): stanza(version, directory, os_name, arch)
         for os_name, arch in PLATFORMS
     }
-    return f'''class Keyway < Formula
+    return f'''class Keybay < Formula
   desc "Austere, local, run-scoped secret injection"
-  homepage "https://github.com/danReynolds/keyway"
+  homepage "https://github.com/danReynolds/keybay"
   version "{version}"
   license "MIT"
 
@@ -74,14 +74,14 @@ def render(version: str, directory: pathlib.Path) -> str:
   end
 
   def install
-    bin.install "keyway"
+    bin.install "keybay"
     prefix.install "README.md"
     pkgshare.install "example"
   end
 
   test do
-    assert_equal "#{{version}}\\n", shell_output("#{{bin}}/keyway --version")
-    assert_includes shell_output("#{{bin}}/keyway --help"), "run [-f FILE]"
+    assert_equal "#{{version}}\\n", shell_output("#{{bin}}/keybay --version")
+    assert_includes shell_output("#{{bin}}/keybay --help"), "run [-f FILE]"
   end
 end
 '''

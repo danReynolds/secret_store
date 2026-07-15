@@ -1,4 +1,4 @@
-# keyway on Linux
+# keybay on Linux
 
 Every secret lives in **one authenticated encrypted file** at
 `${XDG_DATA_HOME:-~/.local/share}/<appId>/secrets.enc` (mode `0600`, written

@@ -1,5 +1,5 @@
 # Tag vocabulary. `dart test` runs everything; integration tests self-skip
-# unless KEYWAY_INTEGRATION=1 (they touch the real OS keystore /
+# unless KEYBAY_INTEGRATION=1 (they touch the real OS keystore /
 # secret-tool and may surface an auth dialog).
 tags:
   unit:

@@ -2,7 +2,7 @@
 set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
-tmp="$(mktemp -d "${TMPDIR:-/tmp}/keyway-cli-storage.XXXXXX")"
+tmp="$(mktemp -d "${TMPDIR:-/tmp}/keybay-cli-storage.XXXXXX")"
 holder_pid=""
 app_id=""
 writer_pids=()
@@ -38,14 +38,14 @@ cleanup() {
 }
 trap cleanup EXIT
 
-dart compile exe packages/keyway_cli/tool/integration_harness.dart \
-  -o "$tmp/keyway-integration"
+dart compile exe packages/keybay_cli/tool/integration_harness.dart \
+  -o "$tmp/keybay-integration"
 
-app_id="keyway-cli-itest-${GITHUB_RUN_ID:-$$}"
-key="keyway-itest/token"
-sentinel="keyway-integration-value-${GITHUB_RUN_ID:-$$}"
+app_id="keybay-cli-itest-${GITHUB_RUN_ID:-$$}"
+key="keybay-itest/token"
+sentinel="keybay-integration-value-${GITHUB_RUN_ID:-$$}"
 manifest="$tmp/.secrets.env"
-printf 'LITERAL=from-manifest\nSECRET=kw://%s\n' "$key" >"$manifest"
+printf 'LITERAL=from-manifest\nSECRET=kb://%s\n' "$key" >"$manifest"
 
 concurrent_writers=8
 concurrent_names=()
@@ -53,7 +53,7 @@ concurrent_gate="$tmp/concurrent-writer-gate"
 for writer in $(seq 0 $((concurrent_writers - 1))); do
   suffix="$(printf '%02d' "$writer")"
   concurrent_names+=("CONCURRENT_$suffix")
-  printf 'CONCURRENT_%s=kw://keyway-itest/concurrent-%s\n' \
+  printf 'CONCURRENT_%s=kb://keybay-itest/concurrent-%s\n' \
     "$suffix" "$suffix" >>"$manifest"
   (
     touch "$tmp/concurrent-writer-ready-$suffix"
@@ -61,8 +61,8 @@ for writer in $(seq 0 $((concurrent_writers - 1))); do
       sleep 0.01
     done
     printf 'concurrent-%s' "$suffix" | \
-      "$tmp/keyway-integration" "$app_id" set --stdin \
-        "keyway-itest/concurrent-$suffix"
+      "$tmp/keybay-integration" "$app_id" set --stdin \
+        "keybay-itest/concurrent-$suffix"
   ) &
   writer_pids+=("$!")
 done
@@ -88,23 +88,23 @@ writer_pids=()
 ((writer_failed == 0)) || fail "a concurrent writer failed"
 
 set_output="$(printf '%s' "$sentinel" | \
-  "$tmp/keyway-integration" "$app_id" set --stdin "$key")"
+  "$tmp/keybay-integration" "$app_id" set --stdin "$key")"
 [[ -z "$set_output" ]] || fail "set --stdin wrote unexpected output"
 
-list_output="$("$tmp/keyway-integration" "$app_id" list)"
+list_output="$("$tmp/keybay-integration" "$app_id" list)"
 expected_list="$(
   for writer in $(seq 0 $((concurrent_writers - 1))); do
-    printf 'keyway-itest/concurrent-%02d\n' "$writer"
+    printf 'keybay-itest/concurrent-%02d\n' "$writer"
   done
-  printf 'keyway-itest/token'
+  printf 'keybay-itest/token'
 )"
 [[ "$list_output" == "$expected_list" ]] || \
   fail "list output did not contain the sorted test keys"
 
 concurrent_values="$(
-  "$tmp/keyway-integration" "$app_id" run -f "$manifest" -- \
+  "$tmp/keybay-integration" "$app_id" run -f "$manifest" -- \
     /bin/sh -c 'for name do /usr/bin/printenv "$name"; done' \
-      keyway-concurrent-values "${concurrent_names[@]}"
+      keybay-concurrent-values "${concurrent_names[@]}"
 )"
 expected_values="$(
   for writer in $(seq 0 $((concurrent_writers - 1))); do
@@ -114,11 +114,11 @@ expected_values="$(
 [[ "$concurrent_values" == "$expected_values" ]] || \
   fail "concurrent writes did not preserve every value"
 
-resolved="$("$tmp/keyway-integration" "$app_id" run -f "$manifest" -- \
+resolved="$("$tmp/keybay-integration" "$app_id" run -f "$manifest" -- \
   /usr/bin/printenv SECRET)"
 [[ "$resolved" == "$sentinel" ]] || fail "run did not resolve the stored value"
 
-literal="$("$tmp/keyway-integration" "$app_id" run -f "$manifest" -- \
+literal="$("$tmp/keybay-integration" "$app_id" run -f "$manifest" -- \
   /usr/bin/printenv LITERAL)"
 [[ "$literal" == "from-manifest" ]] || \
   fail "run did not overlay the manifest literal"
@@ -138,7 +138,7 @@ done
 [[ -e "$ready" ]] || fail "lock holder did not become ready"
 set +e
 busy_output="$(printf 'replacement' | \
-  "$tmp/keyway-integration" "$app_id" set --stdin "$key" 2>&1)"
+  "$tmp/keybay-integration" "$app_id" set --stdin "$key" 2>&1)"
 busy_status=$?
 set -e
 kill "$holder_pid" 2>/dev/null || true
@@ -146,33 +146,33 @@ wait "$holder_pid" 2>/dev/null || true
 holder_pid=""
 [[ $busy_status -eq 75 ]] || \
   fail "live lock contention exited $busy_status, expected 75"
-[[ "$busy_output" == *"another live Keyway writer"* ]] || \
+[[ "$busy_output" == *"another live Keybay writer"* ]] || \
   fail "live lock output omitted writer guidance"
 [[ "$busy_output" == *"not a stale lock file"* ]] || \
   fail "live lock output omitted stale-file guidance"
-resolved_after_busy="$("$tmp/keyway-integration" "$app_id" run -f "$manifest" -- \
+resolved_after_busy="$("$tmp/keybay-integration" "$app_id" run -f "$manifest" -- \
   /usr/bin/printenv SECRET)"
 [[ "$resolved_after_busy" == "$sentinel" ]] || \
   fail "contended write changed the previously stored value"
 
-"$tmp/keyway-integration" "$app_id" rm "$key"
-"$tmp/keyway-integration" "$app_id" rm "$key"
+"$tmp/keybay-integration" "$app_id" rm "$key"
+"$tmp/keybay-integration" "$app_id" rm "$key"
 for writer in $(seq 0 $((concurrent_writers - 1))); do
-  "$tmp/keyway-integration" "$app_id" rm \
-    "keyway-itest/concurrent-$(printf '%02d' "$writer")"
+  "$tmp/keybay-integration" "$app_id" rm \
+    "keybay-itest/concurrent-$(printf '%02d' "$writer")"
 done
 
 set +e
-missing_output="$("$tmp/keyway-integration" "$app_id" run -f "$manifest" -- \
+missing_output="$("$tmp/keybay-integration" "$app_id" run -f "$manifest" -- \
   /usr/bin/true 2>&1)"
 missing_status=$?
 set -e
 [[ $missing_status -eq 78 ]] || \
   fail "missing-reference run exited $missing_status, expected 78"
-[[ "$missing_output" == *"keyway set $key"* ]] || \
+[[ "$missing_output" == *"keybay set $key"* ]] || \
   fail "missing-reference output omitted set remediation"
 [[ "$missing_output" == *"Nothing was launched."* ]] || \
   fail "missing-reference output omitted atomicity notice"
 
-"$tmp/keyway-integration" "$app_id" doctor >/dev/null
+"$tmp/keybay-integration" "$app_id" doctor >/dev/null
 echo "CLI real-store round trip passed"

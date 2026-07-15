@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""PTY checks for Keyway's hidden prompt and signal restoration."""
+"""PTY checks for Keybay's hidden prompt and signal restoration."""
 
 from __future__ import annotations
 

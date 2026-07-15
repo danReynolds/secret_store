@@ -5,23 +5,23 @@ library;
 import 'dart:io';
 import 'dart:typed_data';
 
-import 'package:keyway/keyway.dart' show SecretStorage;
-import 'package:keyway/src/backend.dart';
-import 'package:keyway/src/errors.dart';
-import 'package:keyway/src/ffi/keychain.dart';
+import 'package:keybay/keybay.dart' show SecretStorage;
+import 'package:keybay/src/backend.dart';
+import 'package:keybay/src/errors.dart';
+import 'package:keybay/src/ffi/keychain.dart';
 import 'package:test/test.dart';
 
 /// Exercises the REAL macOS login Keychain. Opt-in — these create and delete
 /// items under a throwaway service and may surface an auth dialog on some
 /// machines. Run with:
-///   KEYWAY_INTEGRATION=1 dart test -t integration
+///   KEYBAY_INTEGRATION=1 dart test -t integration
 void main() {
-  // Runtime gate (not a compile-time define): export KEYWAY_INTEGRATION=1.
-  final envEnabled = Platform.environment['KEYWAY_INTEGRATION'] == '1';
-  final skip = envEnabled ? false : 'set KEYWAY_INTEGRATION=1';
+  // Runtime gate (not a compile-time define): export KEYBAY_INTEGRATION=1.
+  final envEnabled = Platform.environment['KEYBAY_INTEGRATION'] == '1';
+  final skip = envEnabled ? false : 'set KEYBAY_INTEGRATION=1';
 
   final api = AppleKeychainApi();
-  const service = 'ca.danreynolds.keyway.itest';
+  const service = 'ca.danreynolds.keybay.itest';
 
   Uint8List bytes(List<int> v) => Uint8List.fromList(v);
 

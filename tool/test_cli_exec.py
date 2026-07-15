@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Black-box execve and manifest tests for the compiled Keyway CLI."""
+"""Black-box execve and manifest tests for the compiled Keybay CLI."""
 
 from __future__ import annotations
 
@@ -81,18 +81,18 @@ def read_pty(fd: int, needle: bytes, timeout: float = 5.0) -> bytes:
 
 def main() -> int:
     if len(sys.argv) != 2:
-        print(f"usage: {sys.argv[0]} KEYWAY", file=sys.stderr)
+        print(f"usage: {sys.argv[0]} KEYBAY", file=sys.stderr)
         return 2
     cli = os.path.abspath(sys.argv[1])
 
-    with tempfile.TemporaryDirectory(prefix="keyway-cli-exec-") as raw_tmp:
+    with tempfile.TemporaryDirectory(prefix="keybay-cli-exec-") as raw_tmp:
         tmp = Path(raw_tmp)
         empty = tmp / "empty.env"
         empty.write_text("", encoding="utf-8")
         mixed = tmp / "mixed.env"
         mixed.write_text(
             "PATH=/usr/bin:/bin\n"
-            "KEYWAY_LITERAL=from-manifest\n"
+            "KEYBAY_LITERAL=from-manifest\n"
             "EMPTY=\n",
             encoding="utf-8",
         )
@@ -100,7 +100,7 @@ def main() -> int:
         usage = subprocess.run(
             [cli], text=True, capture_output=True, check=False
         )
-        assert_result(usage, 2, stderr_contains="Try keyway --help")
+        assert_result(usage, 2, stderr_contains="Try keybay --help")
 
         argv_sentinel = "must-not-echo-this-argument"
         bad_set = subprocess.run(
@@ -134,8 +134,8 @@ def main() -> int:
             raise AssertionError("stdin diagnostic echoed secret input")
 
         inherited = dict(os.environ)
-        inherited["KEYWAY_LITERAL"] = "from-parent"
-        result = run(cli, mixed, "printenv", "KEYWAY_LITERAL", env=inherited)
+        inherited["KEYBAY_LITERAL"] = "from-parent"
+        result = run(cli, mixed, "printenv", "KEYBAY_LITERAL", env=inherited)
         assert_result(result, 0, stdout="from-manifest\n")
 
         result = run(cli, mixed, "/usr/bin/printf", "%s:%s", "argv", "kept")
@@ -144,7 +144,7 @@ def main() -> int:
         result = run(cli, empty, "/usr/bin/false")
         assert_result(result, 1)
 
-        result = run(cli, empty, "definitely-not-a-keyway-command")
+        result = run(cli, empty, "definitely-not-a-keybay-command")
         assert_result(result, 127, stderr_contains="command not found")
 
         invalid_manifest = tmp / "invalid.env"
@@ -223,7 +223,7 @@ def main() -> int:
         if child_pid != process.pid:
             process.kill()
             raise AssertionError(
-                f"keyway remained as wrapper pid {process.pid}; child was {child_pid}"
+                f"keybay remained as wrapper pid {process.pid}; child was {child_pid}"
             )
         os.kill(process.pid, signal.SIGTERM)
         status = process.wait(timeout=5)

@@ -7,50 +7,50 @@
 # gate after first publication.
 set -euo pipefail
 repo="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-tmp="$(mktemp -d "${TMPDIR:-/tmp}/keyway-dart-install.XXXXXX")"
+tmp="$(mktemp -d "${TMPDIR:-/tmp}/keybay-dart-install.XXXXXX")"
 trap 'rm -rf "$tmp"' EXIT
 
-cp -R "$repo/packages/keyway_cli" "$tmp/keyway_cli"
-rm -rf "$tmp/keyway_cli/.dart_tool"
+cp -R "$repo/packages/keybay_cli" "$tmp/keybay_cli"
+rm -rf "$tmp/keybay_cli/.dart_tool"
 
 awk -v root="$repo" '
-  $0 == "  keyway: 0.1.0" {
-    print "  keyway:"
+  $0 == "  keybay: 0.1.0" {
+    print "  keybay:"
     print "    path: " root
     next
   }
   { print }
-' "$tmp/keyway_cli/pubspec.yaml" > "$tmp/pubspec.yaml"
-mv "$tmp/pubspec.yaml" "$tmp/keyway_cli/pubspec.yaml"
+' "$tmp/keybay_cli/pubspec.yaml" > "$tmp/pubspec.yaml"
+mv "$tmp/pubspec.yaml" "$tmp/keybay_cli/pubspec.yaml"
 
 home="$tmp/home"
 mkdir -p "$home"
 HOME="$home" dart install \
-  "keyway_cli@{path: $tmp/keyway_cli}"
+  "keybay_cli@{path: $tmp/keybay_cli}"
 
 installed="$(
   find "$home" \( -type f -o -type l \) \
-    -path '*/Dart/install/bin/keyway' -perm -u+x -print -quit
+    -path '*/Dart/install/bin/keybay' -perm -u+x -print -quit
 )"
 if [[ -z "$installed" ]]; then
-  echo "dart install did not create a keyway executable under disposable HOME" >&2
+  echo "dart install did not create a keybay executable under disposable HOME" >&2
   exit 1
 fi
 # The installed bundle is a native executable, not a launcher that finds Dart.
 actual_version="$(PATH=/usr/bin:/bin "$installed" --version)"
 if [[ "$actual_version" != "0.1.0" ]]; then
-  echo "installed keyway version was '$actual_version', expected '0.1.0'" >&2
+  echo "installed keybay version was '$actual_version', expected '0.1.0'" >&2
   exit 1
 fi
 help_lines="$("$installed" --help | wc -l | tr -d ' ')"
 if ((help_lines > 24)); then
-  echo "installed keyway help used $help_lines lines, expected at most 24" >&2
+  echo "installed keybay help used $help_lines lines, expected at most 24" >&2
   exit 1
 fi
 
-HOME="$home" dart uninstall keyway_cli
+HOME="$home" dart uninstall keybay_cli
 if [[ -e "$installed" ]]; then
-  echo "dart uninstall left the keyway executable installed" >&2
+  echo "dart uninstall left the keybay executable installed" >&2
   exit 1
 fi
 echo "CLI hermetic dart install passed"

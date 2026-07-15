@@ -25,7 +25,7 @@ void main() {
     // closure and excludes the test/lints toolchain.
     // A pub workspace reports every workspace member as `kind: root`; select
     // this package by name rather than depending on output order.
-    final root = packages.firstWhere((p) => p['name'] == 'keyway');
+    final root = packages.firstWhere((p) => p['name'] == 'keybay');
     final seeds = (root['directDependencies'] as List).cast<String>();
 
     // BFS the main closure.

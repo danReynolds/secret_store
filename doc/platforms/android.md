@@ -1,4 +1,4 @@
-# keyway on Android
+# keybay on Android
 
 **Requires Android 12 (API 31) or newer.** Older versions throw a typed
 `KeystoreUnreachable` rather than degrading.
@@ -20,7 +20,7 @@ another device cannot decrypt the store — the hardware key stays behind.
 
 Android's Keystore is a Java API with no NDK/C surface, so reaching it normally
 means JNI — and the ecosystem's JNI packages require the Flutter SDK, which
-would break every Flutter-less server that depends on this package. keyway
+would break every Flutter-less server that depends on this package. keybay
 avoids that: Android exports `JNI_GetCreatedJavaVMs` from `libnativehelper` to
 apps at **API 31+**, so a hand-rolled `dart:ffi` shim can discover the JVM and
 call framework classes directly — **no plugin, no platform channels, no

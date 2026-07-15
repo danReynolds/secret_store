@@ -1,14 +1,14 @@
-name: release keyway CLI
+name: release keybay CLI
 
 on:
   push:
-    tags: ['keyway_cli-v[0-9]+.[0-9]+.[0-9]+*']
+    tags: ['keybay_cli-v[0-9]+.[0-9]+.[0-9]+*']
 
 permissions:
   contents: read
 
 concurrency:
-  group: keyway-cli-release-${{ github.ref }}
+  group: keybay-cli-release-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
@@ -23,8 +23,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          version="${GITHUB_REF_NAME#keyway_cli-v}"
-          package_version="$(awk '$1 == "version:" { print $2 }' packages/keyway_cli/pubspec.yaml)"
+          version="${GITHUB_REF_NAME#keybay_cli-v}"
+          package_version="$(awk '$1 == "version:" { print $2 }' packages/keybay_cli/pubspec.yaml)"
           test "$version" = "$package_version"
           git fetch origin main
           git merge-base --is-ancestor "$GITHUB_SHA" origin/main
@@ -35,9 +35,9 @@ jobs:
       - run: dart format --output=none --set-exit-if-changed .
       - run: dart analyze --fatal-infos
       - run: dart test -x integration
-      - run: dart test packages/keyway_cli/test -x integration
+      - run: dart test packages/keybay_cli/test -x integration
       - run: ./tool/test_cli.sh
-      - run: ./tool/validate_publish.sh packages/keyway_cli ffi keyway
+      - run: ./tool/validate_publish.sh packages/keybay_cli ffi keybay
 
   build-linux:
     needs: validate
@@ -57,18 +57,18 @@ jobs:
       - run: dart pub get
       - name: compile and package
         run: |
-          version="${GITHUB_REF_NAME#keyway_cli-v}"
+          version="${GITHUB_REF_NAME#keybay_cli-v}"
           mkdir -p build/cli artifacts
-          dart compile exe packages/keyway_cli/bin/keyway.dart -o build/cli/keyway
-          asset="artifacts/keyway-${version}-linux-${{ matrix.arch }}.tar.gz"
-          ./tool/package_cli_release.sh build/cli/keyway "$asset"
+          dart compile exe packages/keybay_cli/bin/keybay.dart -o build/cli/keybay
+          asset="artifacts/keybay-${version}-linux-${{ matrix.arch }}.tar.gz"
+          ./tool/package_cli_release.sh build/cli/keybay "$asset"
           ./tool/verify_cli_archive.sh "$asset" "$version"
-          extracted="$RUNNER_TEMP/keyway-release-example-${{ matrix.arch }}"
+          extracted="$RUNNER_TEMP/keybay-release-example-${{ matrix.arch }}"
           mkdir -p "$extracted"
           tar -xzf "$asset" -C "$extracted"
-          export KEYWAY_BINARY="$extracted/keyway"
-          export KEYWAY_QUICKSTART_DIR="$extracted/example/quickstart"
-          export KEYWAY_QUICKSTART=1
+          export KEYBAY_BINARY="$extracted/keybay"
+          export KEYBAY_QUICKSTART_DIR="$extracted/example/quickstart"
+          export KEYBAY_QUICKSTART=1
           dbus-run-session -- bash -c '
             eval "$(printf release-test | gnome-keyring-daemon --daemonize --unlock --components=secrets)"
             export GNOME_KEYRING_CONTROL
@@ -77,7 +77,7 @@ jobs:
           '
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: keyway-linux-${{ matrix.arch }}
+          name: keybay-linux-${{ matrix.arch }}
           path: artifacts/*.tar.gz
           if-no-files-found: error
           retention-days: 7
@@ -101,9 +101,9 @@ jobs:
       - name: compile release and continuity binaries
         run: |
           mkdir -p build/cli artifacts
-          dart compile exe packages/keyway_cli/bin/keyway.dart -o build/cli/keyway
-          dart compile exe packages/keyway_cli/tool/integration_harness.dart \
-            -o build/cli/keyway-continuity
+          dart compile exe packages/keybay_cli/bin/keybay.dart -o build/cli/keybay
+          dart compile exe packages/keybay_cli/tool/integration_harness.dart \
+            -o build/cli/keybay-continuity
       - name: import Developer ID certificate
         env:
           CERTIFICATE_P12_BASE64: ${{ secrets.APPLE_CERTIFICATE_P12_BASE64 }}
@@ -112,13 +112,13 @@ jobs:
           umask 077
           test -n "$CERTIFICATE_P12_BASE64"
           test -n "$CERTIFICATE_PASSWORD"
-          keychain="$RUNNER_TEMP/keyway-signing.keychain-db"
+          keychain="$RUNNER_TEMP/keybay-signing.keychain-db"
           password="$(openssl rand -hex 24)"
-          printf '%s' "$CERTIFICATE_P12_BASE64" | base64 -D > "$RUNNER_TEMP/keyway-signing.p12"
+          printf '%s' "$CERTIFICATE_P12_BASE64" | base64 -D > "$RUNNER_TEMP/keybay-signing.p12"
           security create-keychain -p "$password" "$keychain"
           security set-keychain-settings -lut 21600 "$keychain"
           security unlock-keychain -p "$password" "$keychain"
-          security import "$RUNNER_TEMP/keyway-signing.p12" \
+          security import "$RUNNER_TEMP/keybay-signing.p12" \
             -k "$keychain" \
             -P "$CERTIFICATE_PASSWORD" \
             -T /usr/bin/codesign
@@ -133,8 +133,8 @@ jobs:
           done < <(security list-keychains -d user)
           security list-keychains -d user -s "$keychain" "${existing_keychains[@]}"
           {
-            echo "KEYWAY_SIGNING_KEYCHAIN=$keychain"
-            echo "KEYWAY_SIGNING_KEYCHAIN_PASSWORD=$password"
+            echo "KEYBAY_SIGNING_KEYCHAIN=$keychain"
+            echo "KEYBAY_SIGNING_KEYCHAIN_PASSWORD=$password"
           } >> "$GITHUB_ENV"
       - name: Developer-ID sign and verify the frozen identity
         env:
@@ -143,12 +143,12 @@ jobs:
         run: |
           test -n "$SIGNING_IDENTITY"
           test -n "$APPLE_TEAM_ID"
-          for binary in build/cli/keyway build/cli/keyway-continuity; do
+          for binary in build/cli/keybay build/cli/keybay-continuity; do
             codesign \
               --force \
-              --keychain "$KEYWAY_SIGNING_KEYCHAIN" \
+              --keychain "$KEYBAY_SIGNING_KEYCHAIN" \
               --sign "$SIGNING_IDENTITY" \
-              --identifier dev.keyway.cli \
+              --identifier io.github.danreynolds.keybay.cli \
               --options runtime \
               --timestamp \
               "$binary"
@@ -158,15 +158,15 @@ jobs:
         run: |
           sentinel="release-continuity-${GITHUB_RUN_ID}-${{ matrix.arch }}"
           printf '%s' "$sentinel" | \
-            build/cli/keyway set --stdin release-check/token
-          listed="$(build/cli/keyway-continuity keyway-cli list)"
+            build/cli/keybay set --stdin release-check/token
+          listed="$(build/cli/keybay-continuity keybay-cli list)"
           test "$listed" = "release-check/token"
-          resolved="$(build/cli/keyway-continuity keyway-cli run -f \
-            <(printf 'TOKEN=kw://release-check/token\n') -- /usr/bin/printenv TOKEN)"
+          resolved="$(build/cli/keybay-continuity keybay-cli run -f \
+            <(printf 'TOKEN=kb://release-check/token\n') -- /usr/bin/printenv TOKEN)"
           test "$resolved" = "$sentinel"
-          build/cli/keyway rm release-check/token
-          rm -rf "$HOME/Library/Application Support/keyway-cli"
-          security delete-generic-password -s keyway-cli -a store-key >/dev/null
+          build/cli/keybay rm release-check/token
+          rm -rf "$HOME/Library/Application Support/keybay-cli"
+          security delete-generic-password -s keybay-cli -a store-key >/dev/null
       - name: notarize standalone binary and inspect the notary log
         env:
           NOTARY_KEY_P8_BASE64: ${{ secrets.APPLE_NOTARY_KEY_P8_BASE64 }}
@@ -178,8 +178,8 @@ jobs:
           test -n "$NOTARY_KEY_ID"
           test -n "$NOTARY_ISSUER_ID"
           printf '%s' "$NOTARY_KEY_P8_BASE64" | base64 -D > "$RUNNER_TEMP/notary-key.p8"
-          ditto -c -k --keepParent build/cli/keyway "$RUNNER_TEMP/keyway-notary.zip"
-          xcrun notarytool submit "$RUNNER_TEMP/keyway-notary.zip" \
+          ditto -c -k --keepParent build/cli/keybay "$RUNNER_TEMP/keybay-notary.zip"
+          xcrun notarytool submit "$RUNNER_TEMP/keybay-notary.zip" \
             --key "$RUNNER_TEMP/notary-key.p8" \
             --key-id "$NOTARY_KEY_ID" \
             --issuer "$NOTARY_ISSUER_ID" \
@@ -197,41 +197,41 @@ jobs:
           # Apple publishes a ticket for this standalone Mach-O, but does not
           # support stapling tickets to standalone binaries. spctl verifies the
           # accepted online ticket instead.
-          spctl --assess --type execute --verbose=4 build/cli/keyway
-          version="${GITHUB_REF_NAME#keyway_cli-v}"
+          spctl --assess --type execute --verbose=4 build/cli/keybay
+          version="${GITHUB_REF_NAME#keybay_cli-v}"
           cp "$RUNNER_TEMP/notary-result.json" \
-            "artifacts/keyway-${version}-macos-${{ matrix.arch }}.notary-result.json"
+            "artifacts/keybay-${version}-macos-${{ matrix.arch }}.notary-result.json"
           cp "$RUNNER_TEMP/notary-log.json" \
-            "artifacts/keyway-${version}-macos-${{ matrix.arch }}.notary-log.json"
+            "artifacts/keybay-${version}-macos-${{ matrix.arch }}.notary-log.json"
       - name: package signed and notarized binary
         run: |
-          version="${GITHUB_REF_NAME#keyway_cli-v}"
-          asset="artifacts/keyway-${version}-macos-${{ matrix.arch }}.tar.gz"
-          ./tool/package_cli_release.sh build/cli/keyway "$asset"
+          version="${GITHUB_REF_NAME#keybay_cli-v}"
+          asset="artifacts/keybay-${version}-macos-${{ matrix.arch }}.tar.gz"
+          ./tool/package_cli_release.sh build/cli/keybay "$asset"
           ./tool/verify_cli_archive.sh "$asset" "$version"
-          extracted="$RUNNER_TEMP/keyway-release-example-${{ matrix.arch }}"
+          extracted="$RUNNER_TEMP/keybay-release-example-${{ matrix.arch }}"
           mkdir -p "$extracted"
           tar -xzf "$asset" -C "$extracted"
-          KEYWAY_BINARY="$extracted/keyway" \
-          KEYWAY_QUICKSTART_DIR="$extracted/example/quickstart" \
-          KEYWAY_QUICKSTART=1 \
+          KEYBAY_BINARY="$extracted/keybay" \
+          KEYBAY_QUICKSTART_DIR="$extracted/example/quickstart" \
+          KEYBAY_QUICKSTART=1 \
           PATH=/usr/bin:/bin \
             ./tool/test_cli_quickstart.sh
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: keyway-macos-${{ matrix.arch }}
+          name: keybay-macos-${{ matrix.arch }}
           path: artifacts/*
           if-no-files-found: error
           retention-days: 7
       - name: clean signing material and disposable store
         if: always()
         run: |
-          rm -rf "$HOME/Library/Application Support/keyway-cli"
-          security delete-generic-password -s keyway-cli -a store-key >/dev/null 2>&1 || true
-          if [[ -n "${KEYWAY_SIGNING_KEYCHAIN:-}" ]]; then
-            security delete-keychain "$KEYWAY_SIGNING_KEYCHAIN" || true
+          rm -rf "$HOME/Library/Application Support/keybay-cli"
+          security delete-generic-password -s keybay-cli -a store-key >/dev/null 2>&1 || true
+          if [[ -n "${KEYBAY_SIGNING_KEYCHAIN:-}" ]]; then
+            security delete-keychain "$KEYBAY_SIGNING_KEYCHAIN" || true
           fi
-          rm -f "$RUNNER_TEMP/keyway-signing.p12" "$RUNNER_TEMP/notary-key.p8"
+          rm -f "$RUNNER_TEMP/keybay-signing.p12" "$RUNNER_TEMP/notary-key.p8"
 
   publish-release:
     needs: [build-linux, build-macos]
@@ -246,7 +246,7 @@ jobs:
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           path: dist
-          pattern: keyway-*
+          pattern: keybay-*
           merge-multiple: true
       - name: verify Homebrew tap preconditions
         env:
@@ -256,12 +256,12 @@ jobs:
           gh api repos/danReynolds/homebrew-tap --jq .full_name
       - name: checksums and Homebrew formula
         run: |
-          version="${GITHUB_REF_NAME#keyway_cli-v}"
+          version="${GITHUB_REF_NAME#keybay_cli-v}"
           find dist -maxdepth 1 -type f \
             \( -name '*.tar.gz' -o -name '*.json' \) -print0 | \
             sort -z | xargs -0 sha256sum | sed 's#  dist/#  #' > dist/SHA256SUMS
-          python3 tool/render_homebrew_formula.py "$version" dist dist/keyway.rb
-          ruby -c dist/keyway.rb
+          python3 tool/render_homebrew_formula.py "$version" dist dist/keybay.rb
+          ruby -c dist/keybay.rb
       - uses: actions/attest-build-provenance@96278af6caaf10aea03fd8d33a09a777ca52d62f # v3.2.0
         with:
           subject-path: dist/*
@@ -269,7 +269,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          version="${GITHUB_REF_NAME#keyway_cli-v}"
+          version="${GITHUB_REF_NAME#keybay_cli-v}"
           if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
             gh release upload "$GITHUB_REF_NAME" dist/* --clobber
           else
@@ -277,19 +277,19 @@ jobs:
               dist/* \
               --verify-tag \
               --generate-notes \
-              --title "Keyway CLI $version"
+              --title "Keybay CLI $version"
           fi
       - name: publish formula to danReynolds/homebrew-tap
         env:
           GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
         run: |
-          version="${GITHUB_REF_NAME#keyway_cli-v}"
-          content="$(base64 -w0 dist/keyway.rb)"
-          sha="$(gh api repos/danReynolds/homebrew-tap/contents/Formula/keyway.rb --jq .sha 2>/dev/null || true)"
+          version="${GITHUB_REF_NAME#keybay_cli-v}"
+          content="$(base64 -w0 dist/keybay.rb)"
+          sha="$(gh api repos/danReynolds/homebrew-tap/contents/Formula/keybay.rb --jq .sha 2>/dev/null || true)"
           args=(
             --method PUT
-            repos/danReynolds/homebrew-tap/contents/Formula/keyway.rb
-            -f "message=keyway $version"
+            repos/danReynolds/homebrew-tap/contents/Formula/keybay.rb
+            -f "message=keybay $version"
             -f "content=$content"
             -f "branch=main"
           )
@@ -307,16 +307,16 @@ jobs:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       - name: install and exercise the published Homebrew channel without Dart
         run: |
-          version="${GITHUB_REF_NAME#keyway_cli-v}"
+          version="${GITHUB_REF_NAME#keybay_cli-v}"
           brew tap danreynolds/tap
-          brew install danreynolds/tap/keyway
-          prefix="$(brew --prefix keyway)"
-          binary="$prefix/bin/keyway"
+          brew install danreynolds/tap/keybay
+          prefix="$(brew --prefix keybay)"
+          binary="$prefix/bin/keybay"
           test "$(PATH=/usr/bin:/bin "$binary" --version)" = "$version"
           PATH=/usr/bin:/bin "$binary" doctor
-          KEYWAY_BINARY="$binary" \
-          KEYWAY_QUICKSTART_DIR="$prefix/share/keyway/example/quickstart" \
-          KEYWAY_QUICKSTART=1 \
+          KEYBAY_BINARY="$binary" \
+          KEYBAY_QUICKSTART_DIR="$prefix/share/keybay/example/quickstart" \
+          KEYBAY_QUICKSTART=1 \
           PATH=/usr/bin:/bin \
             ./tool/test_cli_quickstart.sh
 
@@ -333,9 +333,9 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          version="${GITHUB_REF_NAME#keyway_cli-v}"
-          asset="keyway-${version}-linux-x64.tar.gz"
-          release_dir="$RUNNER_TEMP/keyway-published-release"
+          version="${GITHUB_REF_NAME#keybay_cli-v}"
+          asset="keybay-${version}-linux-x64.tar.gz"
+          release_dir="$RUNNER_TEMP/keybay-published-release"
           mkdir -p "$release_dir"
           cd "$release_dir"
           gh release download "$GITHUB_REF_NAME" \
@@ -355,14 +355,14 @@ jobs:
           ./tool/verify_cli_archive.sh "$archive" "$version"
           mkdir "$release_dir/extracted"
           tar -xzf "$archive" -C "$release_dir/extracted"
-          export KEYWAY_BINARY="$release_dir/extracted/keyway"
-          export KEYWAY_QUICKSTART_DIR="$release_dir/extracted/example/quickstart"
-          export KEYWAY_QUICKSTART=1
+          export KEYBAY_BINARY="$release_dir/extracted/keybay"
+          export KEYBAY_QUICKSTART_DIR="$release_dir/extracted/example/quickstart"
+          export KEYBAY_QUICKSTART=1
           dbus-run-session -- bash -c '
             eval "$(printf release-acceptance | gnome-keyring-daemon --daemonize --unlock --components=secrets)"
             export GNOME_KEYRING_CONTROL
             export PATH=/usr/bin:/bin
-            "$KEYWAY_BINARY" doctor
+            "$KEYBAY_BINARY" doctor
             ./tool/test_cli_quickstart.sh
           '
 
@@ -377,18 +377,18 @@ jobs:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       - uses: dart-lang/setup-dart@65eb853c7ba17dde3be364c3d2858773e7144260 # v1.7.2
       - run: dart pub get
-        working-directory: packages/keyway_cli
-      - run: ./tool/validate_publish.sh packages/keyway_cli ffi keyway
+        working-directory: packages/keybay_cli
+      - run: ./tool/validate_publish.sh packages/keybay_cli ffi keybay
       - name: record manual first-publication bootstrap
-        if: github.ref_name == 'keyway_cli-v0.1.0'
+        if: github.ref_name == 'keybay_cli-v0.1.0'
         run: |
-          echo "::notice title=Manual pub.dev bootstrap required::The signed native Keyway CLI 0.1.0 release is complete. Publish keyway_cli 0.1.0 manually from this exact tag, then enable trusted publishing. See doc/cli-release.md."
+          echo "::notice title=Manual pub.dev bootstrap required::The signed native Keybay CLI 0.1.0 release is complete. Publish keybay_cli 0.1.0 manually from this exact tag, then enable trusted publishing. See doc/cli-release.md."
           {
             echo "### Manual pub.dev bootstrap required"
             echo
-            echo "All native release gates completed and the keyway_cli 0.1.0 archive validated. Pub.dev cannot automate a package's first version, so publish manually from this exact tag, then enable trusted publishing and remove this one-time guard."
+            echo "All native release gates completed and the keybay_cli 0.1.0 archive validated. Pub.dev cannot automate a package's first version, so publish manually from this exact tag, then enable trusted publishing and remove this one-time guard."
           } >> "$GITHUB_STEP_SUMMARY"
       - name: publish to pub.dev through GitHub OIDC
-        if: github.ref_name != 'keyway_cli-v0.1.0'
+        if: github.ref_name != 'keybay_cli-v0.1.0'
         run: dart pub publish --force
-        working-directory: packages/keyway_cli
+        working-directory: packages/keybay_cli

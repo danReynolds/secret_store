@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Hold a Keyway advisory lock for the CLI contention integration test."""
+"""Hold a Keybay advisory lock for the CLI contention integration test."""
 
 from __future__ import annotations
 

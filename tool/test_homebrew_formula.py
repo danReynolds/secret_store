@@ -26,7 +26,7 @@ def load_renderer():
 def main() -> int:
     renderer = load_renderer()
     version = "0.1.0"
-    with tempfile.TemporaryDirectory(prefix="keyway-formula.") as tmp:
+    with tempfile.TemporaryDirectory(prefix="keybay-formula.") as tmp:
         directory = pathlib.Path(tmp)
         expected_hashes = []
         for os_name, arch in renderer.PLATFORMS:
@@ -35,7 +35,7 @@ def main() -> int:
             (directory / renderer.asset(version, os_name, arch)).write_bytes(data)
 
         formula = renderer.render(version, directory)
-        formula_path = directory / "keyway.rb"
+        formula_path = directory / "keybay.rb"
         formula_path.write_text(formula, encoding="utf-8")
         for digest in expected_hashes:
             if formula.count(digest) != 1:

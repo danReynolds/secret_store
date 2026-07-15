@@ -1,4 +1,4 @@
-# keyway on iOS
+# keybay on iOS
 
 Each secret is a **native item in the Data Protection keychain**, encrypted by
 the OS with **AES-256-GCM** and gated by the **Secure Enclave**. There is no

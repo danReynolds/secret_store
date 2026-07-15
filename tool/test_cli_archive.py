@@ -35,26 +35,26 @@ def reject(repo: pathlib.Path, archive: pathlib.Path, case: str) -> None:
 
 def main() -> int:
     repo = pathlib.Path(__file__).resolve().parent.parent
-    with tempfile.TemporaryDirectory(prefix="keyway-archive-negative.") as raw_tmp:
+    with tempfile.TemporaryDirectory(prefix="keybay-archive-negative.") as raw_tmp:
         tmp = pathlib.Path(raw_tmp)
 
         duplicate = tmp / "duplicate.tar.gz"
         with tarfile.open(duplicate, "w:gz") as archive:
-            add_file(archive, "keyway", b"first")
-            add_file(archive, "keyway", b"second")
+            add_file(archive, "keybay", b"first")
+            add_file(archive, "keybay", b"second")
         reject(repo, duplicate, "duplicate-member")
 
         symlink = tmp / "symlink.tar.gz"
         with tarfile.open(symlink, "w:gz") as archive:
-            member = tarfile.TarInfo("keyway")
+            member = tarfile.TarInfo("keybay")
             member.type = tarfile.SYMTYPE
-            member.linkname = "/tmp/keyway-archive-symlink-target"
+            member.linkname = "/tmp/keybay-archive-symlink-target"
             archive.addfile(member)
         reject(repo, symlink, "symbolic-link")
 
         traversal = tmp / "traversal.tar.gz"
         with tarfile.open(traversal, "w:gz") as archive:
-            add_file(archive, "../../keyway-archive-escape")
+            add_file(archive, "../../keybay-archive-escape")
         reject(repo, traversal, "path-traversal")
 
         unexpected = tmp / "unexpected.tar.gz"
@@ -64,7 +64,7 @@ def main() -> int:
 
         missing = tmp / "missing.tar.gz"
         with tarfile.open(missing, "w:gz") as archive:
-            add_file(archive, "keyway")
+            add_file(archive, "keybay")
         reject(repo, missing, "missing-member")
 
         corrupt = tmp / "corrupt.tar.gz"

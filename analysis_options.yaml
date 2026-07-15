@@ -6,7 +6,7 @@ analyzer:
   # so analyze each with `flutter analyze` from its own directory.
   exclude:
     - example_flutter/**
-    - packages/keyway_cli/example/flutter/**
+    - packages/keybay_cli/example/flutter/**
   language:
     strict-casts: true
     strict-inference: true
