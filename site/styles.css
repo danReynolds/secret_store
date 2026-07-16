@@ -129,16 +129,18 @@ h3 {
 }
 
 .brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
   font-weight: 760;
   letter-spacing: -0.02em;
   text-decoration: none;
 }
 
-.brand span {
-  margin-right: 6px;
-  color: #5d8d2e;
-  font-family: "SFMono-Regular", Consolas, monospace;
-  font-size: 0.78rem;
+.brand img {
+  width: 24px;
+  height: 24px;
+  flex: none;
 }
 
 nav {
@@ -1030,7 +1032,7 @@ pre .err {
 }
 
 .not-found-inner .brand {
-  display: inline-block;
+  display: inline-flex;
   margin-bottom: 72px;
 }
 

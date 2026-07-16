@@ -1,11 +1,12 @@
+<img src="https://danreynolds.github.io/keybay/assets/keybay-mark.svg" alt="" width="64" height="64">
+
 # Keybay
 
 **[Read the documentation →](https://danreynolds.github.io/keybay/docs/)**
 
 [CLI guide](https://danreynolds.github.io/keybay/docs/cli/) ·
 [Dart and Flutter SDK](https://danreynolds.github.io/keybay/docs/guide/) ·
-[Security design](https://danreynolds.github.io/keybay/docs/design/) ·
-[![CI](https://github.com/danReynolds/keybay/actions/workflows/ci.yml/badge.svg)](https://github.com/danReynolds/keybay/actions/workflows/ci.yml)
+[Security design](https://danreynolds.github.io/keybay/docs/design/)
 
 Keybay keeps local secret values protected behind each supported operating
 system's credential infrastructure. Its five-command CLI launches any local

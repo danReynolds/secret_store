@@ -16,6 +16,7 @@ BASE_PATH = ENV.fetch("SITE_BASE_PATH", "/keybay").sub(%r{/+$}, "")
 SITE_URL = "https://danreynolds.github.io/keybay"
 REPOSITORY = "https://github.com/danReynolds/keybay"
 PUBLIC_FILES = %w[index.html styles.css 404.html robots.txt].freeze
+PROJECT_PUBLIC_FILES = %w[assets/keybay-mark.svg].freeze
 
 DOCUMENTS = [
   {source: "packages/keybay_cli/README.md", route: "docs/cli/", label: "CLI", summary: "Commit a small manifest, store project-qualified values locally, and launch exactly one process with resolved environment variables."},
@@ -250,6 +251,7 @@ def shared_head(title:, description:, canonical:)
     <meta name="description" content="#{escape(description)}">
     <link rel="canonical" href="#{escape(canonical)}">
     <title>#{escape(title)} — Keybay</title>
+    <link rel="icon" href="#{site_path("assets/keybay-mark.svg")}" type="image/svg+xml">
     <link rel="stylesheet" href="#{site_path("styles.css")}">
   HTML
 end
@@ -259,7 +261,7 @@ def site_header
     <a class="skip-link" href="#main">Skip to content</a>
     <header class="site-header">
       <div class="shell header-inner">
-        <a class="brand" href="#{site_path}" aria-label="Keybay home"><span aria-hidden="true">k/</span> keybay</a>
+        <a class="brand" href="#{site_path}" aria-label="Keybay home"><img src="#{site_path("assets/keybay-mark.svg")}" alt="" width="24" height="24">keybay</a>
         <nav aria-label="Main navigation">
           <a href="#{site_path}">Overview</a>
           <a href="#{site_path("docs/")}">Docs</a>
@@ -465,6 +467,8 @@ end
 
 def validate_output(metadata)
   index = File.read(File.join(OUTPUT, "index.html"), encoding: "UTF-8")
+  raise "Missing Keybay mark" unless File.file?(File.join(OUTPUT, "assets/keybay-mark.svg"))
+  raise "Homepage does not reference the Keybay mark" unless index.include?("assets/keybay-mark.svg")
   raise "Homepage code examples were not highlighted" if index.scan(/<span class="/).length < 8
   raise "Homepage contains executable JavaScript" if index.match?(%r{<script(?! type="application/ld\+json")})
 
@@ -472,6 +476,7 @@ def validate_output(metadata)
     path = File.join(OUTPUT, item[:document][:route], "index.html")
     html = File.read(path, encoding: "UTF-8")
     raise "Missing source digest in #{path}" unless html.include?(%(data-source-digest="#{item[:digest]}"))
+    raise "Generated docs do not reference the Keybay mark: #{path}" unless html.include?("assets/keybay-mark.svg")
     raise "Generated docs contain executable JavaScript: #{path}" if html.include?("<script")
   end
 
@@ -487,6 +492,14 @@ PUBLIC_FILES.each do |file|
   raise "Missing site source: site/#{file}" unless File.file?(source)
 
   FileUtils.cp(source, File.join(OUTPUT, file))
+end
+PROJECT_PUBLIC_FILES.each do |file|
+  source = File.join(ROOT, file)
+  destination = File.join(OUTPUT, file)
+  raise "Missing project asset: #{file}" unless File.file?(source)
+
+  FileUtils.mkdir_p(File.dirname(destination))
+  FileUtils.cp(source, destination)
 end
 
 homepage_path = File.join(OUTPUT, "index.html")

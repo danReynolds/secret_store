@@ -33,6 +33,7 @@ git archive --format=tar HEAD -- \
   README.md \
   SECURITY.md \
   analysis_options.yaml \
+  assets/keybay-mark.svg \
   dart_test.yaml \
   pubspec.yaml \
   doc \
