@@ -5,7 +5,12 @@ on:
     branches: [main]
     paths:
       - .github/workflows/pages.yml
+      - README.md
+      - SECURITY.md
+      - doc/**
+      - packages/keybay_cli/README.md
       - site/**
+      - tool/build_site.rb
   workflow_dispatch:
 
 permissions:
@@ -18,6 +23,8 @@ concurrency:
 jobs:
   deploy:
     runs-on: ubuntu-24.04
+    env:
+      BUNDLE_GEMFILE: site/Gemfile
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
@@ -27,15 +34,25 @@ jobs:
       id-token: write
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
-      - name: Validate static site
+      - uses: ruby/setup-ruby@8e41b362d2589a22a44c1cfa214b3c83052c195b # master 2026-07-15
+        with:
+          ruby-version: "3.3"
+          bundler-cache: true
+      - name: Build source-backed static site
+        run: bundle exec ruby tool/build_site.rb
+      - name: Validate deployment artifact
         run: |
-          test -s site/index.html
-          test -s site/styles.css
-          test -s site/404.html
+          test -s build/site/index.html
+          test -s build/site/styles.css
+          test -s build/site/404.html
+          test -s build/site/docs/index.html
+          test -s build/site/docs/architecture/index.html
+          test -s build/site/docs/design/index.html
+          test ! -e build/site/site.js
       - uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
       - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
         with:
-          path: site
+          path: build/site
       - name: Deploy GitHub Pages
         id: deployment
         uses: actions/deploy-pages@cd2ce8fcbc39b97be8ca5fce6e763baed58fa128 # v5.0.0
