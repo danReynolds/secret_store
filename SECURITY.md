@@ -11,12 +11,13 @@ reproduction if you have one. You'll get an acknowledgement within a few days.
 
 ## Threat model
 
-The threat model — what this library protects against and, just as importantly,
-what it does **not** — is stated in the README ("Threat model" section) and
-derived in full in [doc/design.md](doc/design.md). Read it before relying on the
-library: it is deliberate about its limits (process-memory disclosure, rollback,
-same-user malware while the keystore is unlocked, and timing side-channels are
-out of scope, with rationale).
+The threat model — what Keybay protects against and, just as importantly, what
+it does **not** — is summarized for the [SDK](doc/sdk.md#threat-model) and
+[CLI](packages/keybay_cli/README.md#security-boundary), then derived in full in
+[doc/design.md](doc/design.md). Read it before relying on Keybay: it is
+deliberate about its limits (process-memory disclosure, rollback, same-user
+malware while the keystore is unlocked, and timing side-channels are out of
+scope, with rationale).
 
 ## Cryptography
 

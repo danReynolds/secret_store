@@ -1,194 +1,76 @@
-# Keybay for Dart
+# Keybay
 
-[Website](https://danreynolds.github.io/keybay/) ·
-[Architecture](doc/architecture.md) ·
-[Security policy](SECURITY.md) ·
+**[Read the documentation →](https://danreynolds.github.io/keybay/docs/)**
+
+[CLI guide](https://danreynolds.github.io/keybay/docs/cli/) ·
+[Dart and Flutter SDK](https://danreynolds.github.io/keybay/docs/guide/) ·
+[Security design](https://danreynolds.github.io/keybay/docs/design/) ·
 [![CI](https://github.com/danReynolds/keybay/actions/workflows/ci.yml/badge.svg)](https://github.com/danReynolds/keybay/actions/workflows/ci.yml)
 
-Cross-platform secret storage for Dart and Flutter, plus an austere macOS/Linux
-CLI for run-scoped injection into local processes. On iOS, Android 12+, macOS,
-and Linux desktop, Keybay automatically applies one documented, OS-backed
-storage policy for the current runtime. No Flutter dependency, account, Keybay
-server, resident Keybay process, or network path is required.
+Keybay keeps local secret values protected behind each supported operating
+system's credential infrastructure. Its five-command CLI launches any local
+process with resolved environment variables on macOS and Linux desktop; its
+Dart and Flutter SDK provides direct storage across those platforms, iOS, and
+Android 12+.
 
-| Surface | Use it when | Contract |
-|---|---|---|
-| **`package:keybay` SDK** | Your Dart or Flutter code can read secrets directly | Bytes-first storage through one `SecretStorage(appId:)` constructor |
-| **`keybay` CLI** | Any application already reads environment variables | Five commands and a committed manifest containing literals plus `kb://` references |
+No account, hosted service, daemon, network path, or shell hook.
 
-> **Release candidate:** `0.1.0` has not been published to pub.dev or GitHub
-> Releases yet. The repository is the only working installation source today;
-> hosted and signed-binary commands are intentionally not presented as live.
+> **0.1.0 pre-release:** Keybay is not yet published to pub.dev, GitHub
+> Releases, or Homebrew. Evaluate it from a reviewed source checkout.
 
-## SDK quickstart
+## CLI
 
-For pre-release evaluation, clone the repository and use a path dependency
-pinned to the reviewed checkout:
+Commit references, not secret values.
 
-```yaml
-dependencies:
-  keybay:
-    path: ../keybay
+**`.secrets.env`**
+
+```dotenv
+API_URL=https://staging.example.com
+OPENAI_API_KEY=kb://acme-example/openai-api-key
 ```
 
-After the signed `0.1.0` release, installation becomes `dart pub add keybay`.
+**Terminal**
+
+```sh
+keybay set acme-example/openai-api-key
+keybay run -- ./app.sh
+```
+
+Referenced values become ordinary environment variables in the launched
+process. Namespaces identify values; they are not access-control boundaries.
+
+**[Install and use the CLI →](https://danreynolds.github.io/keybay/docs/cli/)**
+
+## Dart and Flutter
 
 ```dart
 import 'package:keybay/keybay.dart';
 
-final store = SecretStorage(appId: 'com.example.myapp');
-
-await store.writeString('api_token', 's3cr3t');
-final token = await store.readString('api_token');   // 's3cr3t'
-await store.delete('api_token');
+final store = SecretStorage(appId: 'com.example.app');
+await store.writeString('api-token', tokenFromOAuth);
+final stored = await store.readString('api-token');
 ```
 
-`SecretStorage(appId:)` has one production knob: `appId` names the logical
-store and derives its path or service identity; the runtime selects the fixed
-platform scheme. `SecretStorage.withBackend` is the explicit test/custom
-integration hatch for callers that construct a backend themselves, not a
-weaker mode selected by configuration. Values are bytes (`Uint8List`) at the
-core, with `readString`/`writeString` for convenience.
+`appId` names the logical store; the runtime selects Keybay's fixed platform
+policy.
 
-## CLI quickstart
+**[Use the SDK →](https://danreynolds.github.io/keybay/docs/guide/)**
 
-The separately packaged [`keybay_cli`](packages/keybay_cli) product gives any
-language the same storage engine through five commands: `run`, `set`, `rm`,
-`list`, and `doctor`. A committed mixed manifest keeps ordinary configuration
-literal and replaces secret values with explicit, qualified `kb://`
-references. `keybay run -- COMMAND` resolves the references and replaces
-itself with exactly that command—no account, Keybay server, resident Keybay
-process, or shell hook.
+## Security
 
-From a source checkout, activate the current package locally:
+- Native Keychain items where supported; otherwise an authenticated encrypted
+  file whose key is protected by the operating system's credential store.
+- Unavailable, locked, inconsistent, corrupt, tampered, and unsupported stores
+  fail closed. No plaintext fallback is substituted.
+- Protection ends after retrieval or environment injection. Same-user malware,
+  rollback, and root remain outside the threat model.
+- Apple hardware backing is not attested. Android reports the observed
+  wrapping-key security level. Windows and headless deployments are unsupported.
 
-```sh
-dart pub get
-dart pub global activate --source path packages/keybay_cli
-```
+**[Read the security design →](https://danreynolds.github.io/keybay/docs/design/)**
 
-The CLI owns its examples under
-[`packages/keybay_cli/example`](packages/keybay_cli/example): the packaged
-language-neutral quickstart plus Flutter, Rails, and Node workflows. The
-applications read ordinary environment variables and have no Keybay
-dependency. The quickstart is exercised against real macOS and Linux stores
-in CI.
-
-## How your secrets are protected
-
-`SecretStorage(appId:)` picks the scheme for you and is **fail-closed**: when
-the required platform store is unavailable, it throws rather than substituting
-plaintext storage or a plaintext store key beside the encrypted container.
-Apple native-item paths delegate protection to the Data Protection Keychain.
-File paths use an authenticated container, so a wrong key or tampering fails
-before plaintext is returned. Each platform link has the full breakdown.
-
-| Platform | Secrets live in | Protected by |
-|---|---|---|
-| [iOS](doc/platforms/ios.md) | native Data Protection Keychain items | fixed device-bound, non-synchronizing item policy; hardware backing is not attested |
-| [macOS — entitled app](doc/platforms/macos.md#signed-apps-entitled) | native Data Protection Keychain items | the same fixed item policy; hardware backing is not attested |
-| [macOS — CLI / unentitled app](doc/platforms/macos.md#command-line-and-unentitled) | an authenticated encrypted file | 32-byte store key in the login Keychain; login-bound |
-| [Android 12+](doc/platforms/android.md) | an authenticated encrypted file | store key wrapped by Android Keystore; StrongBox requested and actual level inspected |
-| [Linux desktop](doc/platforms/linux.md) | an authenticated encrypted file | 32-byte store key in an unlocked Secret Service provider; login-bound |
-
-Every row is exercised end-to-end through its genuine platform API or service
-(see [Testing](#testing)). Windows is not implemented and fails closed:
-
-| Platform | Planned scheme |
-|---|---|
-| Windows | encrypted file; key in DPAPI / Credential Manager |
-
-Headless deployments have no supported Keybay backend or availability
-contract. A desktop resolver may still reach a configured credential service;
-an absent or locked service fails typed. Deployments should use their
-platform's own secret system. The removed prototype and rationale remain in
-[the research plan](doc/headless-implementation-plan.md).
-
-## Threat model
-
-**Protects against** direct plaintext disclosure from the Keybay container,
-backup, or dotfile sync; other local users; casual disclosure (scrollback,
-`ps` argv); and a wrong or swapped store key (the key-committing container
-fails closed before decryption). On macOS and Linux file paths, offline
-confidentiality is bounded by the strength of the login or keyring password.
-
-**Does not protect against** same-user malware while the keystore is unlocked;
-process-memory disclosure, including swap and core dumps (the package scrubs its
-own native staging buffers, which it can, but key material also transits
-GC-managed heaps — the Dart heap, and on Android the intermediate Java arrays —
-which can't be reliably zeroed and are not claimed to be); rollback to an older
-genuine container (AEAD is not anti-rollback); timing side-channels in pure-Dart
-crypto; root. Concurrent writes are **coordinated**: same-isolate handles
-serialize on a per-path FIFO mutex, and every mutating operation additionally
-takes an exclusive advisory `flock` that excludes other isolates *and* other processes
-(so a lost update, or two first-writers minting rival store keys, cannot happen
-on a filesystem that honors `flock` — local app-data storage does). There is
-**no key escrow**: on the encrypted-file path, losing its store-key item makes
-that container unreadable.
-
-The bar is ssh-agent / aws-vault, not an HSM. Full derivation and the crypto/FFI
-engineering practices are in [doc/design.md](doc/design.md).
-
-## Encrypted-file cryptography
-
-An XChaCha20-Poly1305 (AEAD) container with an HKDF-SHA256-derived
-**key-commitment** header — a wrong key fails closed *before* decryption, and
-multi-key ciphertext games are ruled out. `Random.secure()` only. Everything
-runs through `package:cryptography`, exact-pinned and constructed as concrete
-`Dart*` implementations (so the global crypto locator can't swap them), and is
-exercised against RFC 8439 / RFC 5869 / draft-arciszewski test vectors plus
-edge cases in this package's own suite, so incompatible primitive behavior is
-caught before the exact dependency pin moves. A CI canary fails when a newer
-`cryptography` release appears, so the pin moves only by reviewed decision.
-These checks make dependency and behavior changes visible; they do not prove
-that a dependency is uncompromised.
-
-## Testing
-
-The bar is **every supported platform path exercised through its genuine API or
-service**, repeatably, from the suite — not mocks.
-
-```sh
-./tool/test.sh          # format + analyze + unit + this-machine keystore integration
-./tool/test_linux.sh    # Linux Secret Service, against real gnome-keyring in Docker
-./tool/test_e2e.sh      # the full real-platform matrix (--entitled adds the macOS DP path)
-```
-
-In CI, on every push to main and every pull request: the unit tier (crypto
-vectors, container fuzzing, real POSIX permissions, dependency-closure
-firewall) plus the real macOS Keychain and Linux Secret Service. The mobile
-and entitled-macOS legs need device toolchains and a signing identity, so they
-run locally via `tool/test_e2e.sh`, which boots and tears down the iOS
-simulator and Android emulator itself. One honest limit: on a
-simulator/emulator the secure hardware is *emulated*, so those legs prove the
-real keystore **code path** end-to-end, not that physical silicon mediated it.
-
-## Requirements
-
-- Dart SDK ≥ 3.6.
-- **Desktop:** macOS or Linux (Windows is unsupported). Linux needs
-  `secret-tool` and a Secret Service provider — see [the Linux
-  notes](doc/platforms/linux.md).
-- **Mobile (inside a Flutter app):** iOS, or Android 12 (API 31)+.
-- One exact-pinned third-party runtime dependency, `cryptography`; the rest of
-  the closure is dart-lang official, and a test fails CI if the tree changes.
-  Because that pin is exact, an app depending — directly or transitively — on a
-  different `cryptography` version won't resolve until the versions align; the
-  pin is a deliberate supply-chain control ([doc/design.md](doc/design.md) §10),
-  not an oversight.
-
-## Status
-
-`0.1.0` is a pre-release candidate and has not been published. The API and
-on-disk container format may still change; once published, a future `0.2.0`
-may carry breaking changes under pub's pre-1.0 semantics. Implemented and
-validated end-to-end against the genuine platform path: macOS (CLI and
-entitled), Linux, iOS, and Android 12+. Windows is unsupported and fails typed.
-Headless operation has no supported backend or availability contract.
-Report vulnerabilities per [SECURITY.md](SECURITY.md); design rationale is in
-[doc/design.md](doc/design.md) and [doc/architecture.md](doc/architecture.md),
-with the current product comparison summarized on the
-[project website](https://danreynolds.github.io/keybay/#compare).
+Report vulnerabilities through the
+[private reporting process](https://danreynolds.github.io/keybay/docs/security/#reporting).
 
 ## License
 

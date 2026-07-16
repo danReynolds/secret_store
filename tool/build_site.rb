@@ -18,8 +18,8 @@ REPOSITORY = "https://github.com/danReynolds/keybay"
 PUBLIC_FILES = %w[index.html styles.css 404.html robots.txt].freeze
 
 DOCUMENTS = [
-  {source: "README.md", route: "docs/guide/", label: "Dart & Flutter SDK", summary: "Install the SDK, open a store with one appId, and understand the supported runtime and threat-model boundaries."},
   {source: "packages/keybay_cli/README.md", route: "docs/cli/", label: "CLI", summary: "Commit a small manifest, store project-qualified values locally, and launch exactly one process with resolved environment variables."},
+  {source: "doc/sdk.md", route: "docs/guide/", label: "Dart & Flutter SDK", summary: "Install the SDK, open a store with one appId, and understand the supported runtime and threat-model boundaries."},
   {source: "doc/platforms/ios.md", route: "docs/platforms/ios/", label: "iOS", summary: "Native Data Protection Keychain items with a fixed device-bound, non-synchronizing accessibility policy."},
   {source: "doc/platforms/android.md", route: "docs/platforms/android/", label: "Android", summary: "An authenticated app-private file whose store key is wrapped by Android Keystore on Android 12 and newer."},
   {source: "doc/platforms/macos.md", route: "docs/platforms/macos/", label: "macOS", summary: "Native Data Protection Keychain items for entitled apps; an authenticated file with a login-Keychain key otherwise."},
@@ -37,8 +37,8 @@ PRIMARY_NAVIGATION = [
   {
     group: "Use",
     links: [
-      {label: "Dart & Flutter SDK", route: "docs/guide/", fragment: "sdk-quickstart"},
       {label: "CLI", route: "docs/cli/"},
+      {label: "Dart & Flutter SDK", route: "docs/guide/", fragment: "sdk-quickstart"},
     ],
   },
   {
@@ -361,8 +361,8 @@ def documentation_index(metadata)
             </header>
 
             <nav class="doc-starts" aria-label="Start with Keybay">
-              <a href="#{site_path("docs/guide/")}#sdk-quickstart"><strong>Dart & Flutter SDK →</strong><span>Store and read secrets directly.</span></a>
               <a href="#{site_path("docs/cli/")}"><strong>Local-process CLI →</strong><span>Resolve a committed manifest into one process.</span></a>
+              <a href="#{site_path("docs/guide/")}#sdk-quickstart"><strong>Dart & Flutter SDK →</strong><span>Store and read secrets directly.</span></a>
               <a href="#{site_path("docs/design/")}"><strong>Evaluate security →</strong><span>Inspect the cryptography, threat model, and limits.</span></a>
             </nav>
 

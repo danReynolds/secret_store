@@ -112,7 +112,8 @@ stack per OS.
 
 ## Per-platform resolution
 
-The README's formal table is the reference; the shape summary:
+The [SDK guide's formal table](sdk.md#how-your-secrets-are-protected) is the
+reference; the shape summary:
 
 | Platform (context) | Shape | Key store | Status |
 |---|---|---|---|

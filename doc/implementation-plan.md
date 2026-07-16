@@ -4,7 +4,8 @@
 has moved past it in places — where this file disagrees with
 [design.md](design.md) or the code, the code wins.*
 
-Executes the README's "How your secrets are protected" table. Governing rules:
+Executes the [SDK guide's "How your secrets are protected"](sdk.md#how-your-secrets-are-protected)
+table. Governing rules:
 **one clear way to do things** (a knob must justify its existence or die),
 **maximum reuse** (a new platform = one new binding *or* one new key source,
 never a new stack), and **small code = small attack surface**.
@@ -113,8 +114,8 @@ part:
 
 **Phase 1 — v1 (now):** resolver + probe; `appId` grammar/derivation +
 traversal tests; knob elimination + export trim; `SecurityLevel` on
-`BackendInfo`; update example, README status column (macOS-entitled → shipped,
-manual-verified), architecture.md alignment (still says "always file" — fix to
+`BackendInfo`; update example and SDK guide platform claims (macOS-entitled →
+shipped, manual-verified), architecture.md alignment (still says "always file" — fix to
 the three-tier model), design doc §4, CHANGELOG (breaking: default scheme
 changes from direct items to file — pre-1.0, no migration, re-provision).
 Verify: full unit tier + macOS integration (real round-trip via `appId`; probe

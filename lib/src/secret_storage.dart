@@ -1,10 +1,10 @@
 /// The front API (see doc/design.md): a bytes-first async key-value store.
 ///
 /// The production front door has one input: `SecretStorage(appId:)`. It
-/// resolves the fixed policy for the current platform (the README's platform
-/// table); callers using that constructor never pick a mechanism, file path,
-/// or key home. Those are derived, and every ambiguous state fails closed and
-/// loud. [SecretStorage.withBackend] remains the explicit test/custom hatch.
+/// resolves the fixed policy for the current platform (documented in
+/// doc/sdk.md); callers using that constructor never pick a mechanism, file
+/// path, or key home. Those are derived; every ambiguous state fails closed
+/// and loud. [SecretStorage.withBackend] remains the explicit test/custom hatch.
 library;
 
 import 'dart:convert';

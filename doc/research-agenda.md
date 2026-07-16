@@ -52,7 +52,7 @@ pure Dart). The vector firewall (`test/crypto_vectors_test.dart`) catches a
   (RFC 8439 §2.8.2, Project Wycheproof vectors).
 - **Constant-time MAC verification.** Does `decrypt`/`checkMac` compare Poly1305
   tags in constant time in 2.9.0? A variable-time compare is a classic forgery
-  side channel. The README scopes out *timing side channels in pure-Dart crypto*
+  side channel. The SDK guide scopes out *timing side channels in pure-Dart crypto*
   with a "no remote oracle" argument — verify that argument holds for every way
   this library can be embedded (e.g. a server using `EncryptedFileBackend` where
   an attacker can submit containers).
@@ -73,14 +73,14 @@ The binding targets the **classic login keychain**
 - **At-rest cryptography of the login keychain file.** Historically the
   `.keychain-db` format used 3DES-derived item encryption. What does the current
   format use? This bounds the real at-rest strength of model A on macOS and
-  belongs in the README threat model if it's weaker than the container's
+  belongs in the SDK guide's threat model if it's weaker than the container's
   XChaCha20-Poly1305.
 - **ACL identity for JIT-run Dart. [code fact]** Keychain ACLs key on the
   *binary* identity. Under `dart run`, the acting binary is the shared `dart` VM
   — so after one "Always Allow", plausibly *any* Dart script run by that user
   reads the item silently. Research the exact ACL matching rules for unsigned /
   ad-hoc-signed binaries and partition lists (macOS 10.12+), and whether the
-  README should direct production users to `dart compile exe` so the ACL binds
+  SDK guide should direct production users to `dart compile exe` so the ACL binds
   to their app's identity, not the SDK's.
 - **Prompt suppression for headless use. [code fact]** The binding never calls
   `SecKeychainSetUserInteractionAllowed(false)` (or a per-call equivalent), so on
@@ -115,9 +115,9 @@ The binding targets the **classic login keychain**
 - **Secret-as-`String` on this path. [code fact]** `ProcessRunResult` carries
   stdout as a Dart `String`, and `set()` passes base64 stdin as a `String` —
   so on Linux the *base64 encoding of every secret* becomes an immutable,
-  unzeroable Dart String (secret_service.dart:74-96), while the README says
-  values never become `String`s internally. Research: restructure the runner to
-  bytes end-to-end, or qualify the claim. Base64-of-secret is
+  unzeroable Dart String (secret_service.dart:74-96), despite the bytes-first
+  core surface. Research: restructure the runner to bytes end-to-end, or
+  qualify the guide. Base64-of-secret is
   security-equivalent to the secret.
 - **Interop note.** Values are stored base64-encoded, so items are not readable
   as raw values by other Secret Service consumers (and vice versa). Survey how
@@ -155,7 +155,7 @@ The binding targets the **classic login keychain**
 
 ## 5. Memory hygiene — validate the ceiling, then hit it
 
-README: "Dart cannot zero buffers." True for the GC heap (and a compacting GC
+SDK guide: "Dart cannot zero buffers." True for the GC heap (and a compacting GC
 strands old copies), but **not** for the package's own native allocations:
 
 - **[code fact]** The POSIX write path stages bytes in a `malloc` buffer freed
@@ -166,7 +166,7 @@ strands old copies), but **not** for the package's own native allocations:
   `sodium_memzero`). Research compiler/GC caveats in Dart FFI and just do it.
 - **State of the art for secrets in GC'd languages** — Go `memguard`, Java
   `char[]` guidance, .NET SecureString deprecation rationale — to calibrate what
-  the README can honestly promise, and whether holding the store key *only* in
+  the SDK guide can honestly promise, and whether holding the store key *only* in
   mlock'd native memory (with a zeroing finalizer) is worth the complexity.
 - **OS-level mitigations to offer or document:** `setrlimit(RLIMIT_CORE, 0)`
   via the existing libc shim as an opt-in helper; `mlock` for the key buffer;

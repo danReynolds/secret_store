@@ -547,7 +547,7 @@ release gate succeeds. Trusted OIDC publishing is mandatory thereafter.
 
 The core's bar applies: claims that cross an OS boundary are exercised against
 the real platform mechanism, while fakes are confined to pure command logic
-(README "Testing").
+([SDK guide "Testing"](sdk.md#testing)).
 
 - **Unit tier:** manifest parser — table-driven spec tests plus a **fuzz
   harness** (arbitrary bytes → typed error or valid parse, never a crash);

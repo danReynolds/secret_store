@@ -2,10 +2,10 @@
 //
 //   dart run example/keybay_example.dart
 //
-// One constructor, one input: your app id. The library applies its documented
-// policy for this platform (see the README table) — on a plain CLI like this,
-// an authenticated encrypted file whose key lives in the OS credential store.
-// `describe()` reports what was resolved.
+// One constructor, one input: your app id. The library applies the platform
+// policy documented in doc/sdk.md — on a plain CLI like this, an authenticated
+// encrypted file whose key lives in the OS credential store. `describe()`
+// reports what was resolved.
 import 'dart:io';
 
 import 'package:keybay/keybay.dart';

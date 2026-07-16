@@ -1,6 +1,6 @@
 /// Secret storage for Dart without Flutter.
 ///
-/// See the README for the per-platform protection table and doc/design.md for
+/// See doc/sdk.md for the per-platform protection table and doc/design.md for
 /// the full design. The public surface is deliberately minimal — every symbol
 /// here is attack surface and compatibility surface:
 ///
