@@ -37,7 +37,7 @@
         <nav aria-label="Main navigation">
           <a href="#use">Use</a>
           <a href="#security">Security</a>
-          <a href="#compare">Compare</a>
+          <a href="./docs/">Docs</a>
           <a href="https://github.com/danReynolds/keybay">GitHub ↗</a>
         </nav>
       </div>
@@ -52,14 +52,14 @@
             <p class="lede">Keybay stores secrets behind the operating system's keystore and gives them only to the Dart code or process that asks. No account, server, daemon, or network path.</p>
             <div class="actions">
               <a class="button button-primary" href="#use">Use from source</a>
-              <a class="button" href="https://github.com/danReynolds/keybay#threat-model">Threat model</a>
+              <a class="button" href="./docs/guide/#threat-model">Threat model</a>
             </div>
           </div>
 
           <div class="hero-example" aria-label="Keybay command example">
             <p class="code-label">.secrets.env</p>
-            <pre><code>API_URL=https://staging.example.com
-OPENAI_API_KEY=<span>kb://acme/openai-api-key</span>
+            <pre><code class="language-shell" data-language="shell">API_URL=https://staging.example.com
+OPENAI_API_KEY=kb://acme/openai-api-key
 
 $ keybay set acme/openai-api-key
 $ keybay run -- npm start</code></pre>
@@ -82,18 +82,18 @@ $ keybay run -- npm start</code></pre>
               <h3>Read secrets in code.</h3>
               <p>One constructor selects the platform path. Values are bytes at the core, with string conveniences.</p>
               <p class="code-label">pubspec.yaml · pre-release</p>
-              <pre><code>dependencies:
+              <pre><code class="language-yaml" data-language="yaml">dependencies:
   keybay:
     path: ../keybay</code></pre>
               <p class="code-label">Dart</p>
-              <pre><code>import 'package:keybay/keybay.dart';
+              <pre><code class="language-dart" data-language="dart">import 'package:keybay/keybay.dart';
 
 final store = SecretStorage(
   appId: 'com.example.myapp',
 );
 
 final token = await store.readString('api-token');</code></pre>
-              <a class="text-link" href="https://github.com/danReynolds/keybay#sdk-quickstart">SDK documentation →</a>
+              <a class="text-link" href="./docs/guide/#sdk-quickstart">SDK documentation →</a>
             </article>
 
             <article class="surface" id="cli">
@@ -101,12 +101,12 @@ final token = await store.readString('api-token');</code></pre>
               <h3>Inject secrets at launch.</h3>
               <p>A committed manifest names what the app needs. Keybay resolves it, injects one process, and exits from the process tree.</p>
               <p class="code-label">Shell · pre-release</p>
-              <pre><code>git clone https://github.com/danReynolds/keybay.git
+              <pre><code class="language-shell" data-language="shell">git clone https://github.com/danReynolds/keybay.git
 cd keybay
 dart pub get
 dart pub global activate --source path packages/keybay_cli</code></pre>
               <p class="commands"><code>run</code> <code>set</code> <code>rm</code> <code>list</code> <code>doctor</code></p>
-              <a class="text-link" href="https://github.com/danReynolds/keybay/tree/main/packages/keybay_cli">CLI documentation →</a>
+              <a class="text-link" href="./docs/cli/">CLI documentation →</a>
             </article>
           </div>
 
@@ -171,6 +171,7 @@ dart pub global activate --source path packages/keybay_cli</code></pre>
             <p class="eyebrow">Scope</p>
             <h2 id="compare-title">Less is the feature.</h2>
             <p>Keybay is for local storage and run-scoped injection. It is deliberately not a universal secrets platform.</p>
+            <a class="text-link" href="./docs/comparison/">Full comparison →</a>
           </div>
           <ul class="alternatives">
             <li><a href="https://secretspec.dev/">SecretSpec ↗</a><span>Choose providers, profiles, and generated integrations.</span></li>
@@ -188,10 +189,10 @@ dart pub global activate --source path packages/keybay_cli</code></pre>
             <h2 id="source-title">Read before you trust.</h2>
           </div>
           <div class="source-links">
-            <a href="https://github.com/danReynolds/keybay/blob/main/doc/architecture.md">Architecture ↗</a>
-            <a href="https://github.com/danReynolds/keybay/blob/main/doc/design.md">Cryptography and design ↗</a>
-            <a href="https://github.com/danReynolds/keybay/blob/main/doc/cli-recovery.md">Recovery ↗</a>
-            <a href="https://github.com/danReynolds/keybay/security/policy">Security policy ↗</a>
+            <a href="./docs/architecture/">Architecture →</a>
+            <a href="./docs/design/">Cryptography and design →</a>
+            <a href="./docs/recovery/">Recovery →</a>
+            <a href="./docs/security/">Security policy →</a>
           </div>
         </div>
       </section>
@@ -200,7 +201,7 @@ dart pub global activate --source path packages/keybay_cli</code></pre>
     <footer>
       <div class="shell footer-inner">
         <span>keybay · local secrets, fewer moving parts</span>
-        <a href="https://github.com/danReynolds/keybay">GitHub</a>
+        <span><a href="./docs/">Documentation</a> · <a href="https://github.com/danReynolds/keybay">GitHub</a></span>
       </div>
     </footer>
   </body>
