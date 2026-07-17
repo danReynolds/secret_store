@@ -21,6 +21,15 @@ dart run tool/release.dart publish core        # sign a tag on HEAD and push it
 dart run tool/release.dart publish both        # core first, then the CLI
 ```
 
+For a shorter invocation, install the `tool/keybay-release` launcher onto your
+PATH — it resolves the tool from the current checkout, so it always runs the
+working tree's source and follows worktrees:
+
+```sh
+cp tool/keybay-release ~/.pub-cache/bin/keybay-release && chmod +x ~/.pub-cache/bin/keybay-release
+keybay-release status   # then, from anywhere inside a keybay checkout
+```
+
 `publish` refuses unless every reference agrees, the tree is clean, `HEAD` is
 contained in `origin/main`, the matching `CHANGELOG.md` carries the version, and
 the tag does not already exist; `--dry-run` previews and `--yes` skips the

@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+# keybay-release — thin launcher for tool/release.dart.
+#
+# Resolves the release tool from the *current* git checkout and runs it, so it
+# always reflects the working tree's source (never a stale compiled snapshot)
+# and naturally follows git worktrees. Install by copying this file onto your
+# PATH, e.g.:
+#
+#   cp tool/keybay-release ~/.pub-cache/bin/keybay-release
+#   chmod +x ~/.pub-cache/bin/keybay-release
+#
+# Then, from anywhere inside a keybay checkout:
+#
+#   keybay-release status | check | set <x.y.z> | bump <part> | publish <core|cli|both>
+set -euo pipefail
+
+root="$(git rev-parse --show-toplevel 2>/dev/null || true)"
+tool="${root:+$root/tool/release.dart}"
+if [[ -z "$root" || ! -f "$tool" ]]; then
+  echo "keybay-release: run this from inside a keybay checkout" \
+       "(tool/release.dart not found)" >&2
+  exit 1
+fi
+
+exec dart run "$tool" "$@"
