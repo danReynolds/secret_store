@@ -48,6 +48,30 @@ The Dart channel builds and installs a native `keybay` executable. Dart is
 needed to install or update it, not to launch it afterward. Follow Dart's
 notice if its install-bin directory is not already on `PATH`.
 
+### Verify a release download
+
+Release integrity is machine-checkable end to end: every GitHub release ships
+a `SHA256SUMS` file and a GitHub provenance attestation per artifact, and the
+macOS binaries are Developer ID-signed, hardened-runtime, and notarized. When
+you download an archive (`keybay-<version>-<os>-<arch>.tar.gz`) from a GitHub
+release, verify it before extracting — a link someone hands you is not a
+provenance chain:
+
+```sh
+# 1. The archive must match the release's published checksums.
+#    (macOS: `shasum -a 256 --check --ignore-missing SHA256SUMS`)
+sha256sum --check --ignore-missing SHA256SUMS
+
+# 2. The artifact must prove it was built by this repository's release
+#    workflow from the tag you expect (uses the GitHub CLI).
+gh attestation verify keybay-0.1.0-linux-x64.tar.gz --repo danReynolds/keybay
+```
+
+The other channels carry their own verification: Homebrew checks every
+artifact against the SHA-256 pinned in the formula, `dart install keybay_cli`
+resolves through pub.dev's content-hash verification, and macOS Gatekeeper
+validates the binary's Developer ID signature and notarization.
+
 On Linux, Keybay requires the `secret-tool` client and an unlocked desktop
 Secret Service provider. Homebrew installs its `libsecret` dependency; distro
 or Dart/archive installs should install `libsecret-tools` (Debian/Ubuntu) or
@@ -105,7 +129,10 @@ value across repositories; namespaces organize identity but are not an access
 control boundary.
 
 `set` never accepts a value argument. Interactive input requires a TTY and is
-hidden; automation pipes strict UTF-8:
+hidden; automation pipes strict UTF-8. The two modes never cross: `--stdin` at
+a terminal is refused (typing there would echo the secret into scrollback), and
+empty input is rejected rather than stored, so a silently failed producer in a
+pipeline cannot replace a real credential with the empty string:
 
 ```sh
 op read 'op://Engineering/OpenAI/credential' |
@@ -136,9 +163,13 @@ actually a secret; that classification remains visible in review.
 ## Security boundary
 
 Keybay keeps referenced values out of repositories, argv, its own output, and
-interactive shell state. It preserves the parent environment, overlays only
-variables named by the selected manifest, resolves all references before
-launch, and has no network code.
+interactive shell state. It preserves the parent environment **byte-exact** —
+variables the manifest does not name pass through from the raw process
+`environ`, including values that are not valid UTF-8 — overlays only variables
+named by the selected manifest, resolves all references before launch, and has
+no network code. The launched command starts with shell-default signal state
+(the Dart VM's ignored SIGPIPE and blocked job-control signals are reset at the
+exec boundary), so pipelines behave as they would from a shell.
 
 After injection, values are normal child environment variables. They can be
 inherited by descendants and may be visible to same-user process inspection,

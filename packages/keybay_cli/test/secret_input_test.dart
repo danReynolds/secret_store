@@ -12,8 +12,28 @@ void main() {
       expect(decodeSecretBytes(utf8.encode('value\r\n')), 'value');
       expect(decodeSecretBytes(utf8.encode('value\n\n')), 'value\n');
       expect(decodeSecretBytes(utf8.encode('value\r')), 'value\r');
-      expect(decodeSecretBytes(const <int>[]), '');
-      expect(decodeSecretBytes(utf8.encode('\n')), '');
+    });
+
+    test('rejects empty input so a failed producer cannot store ""', () {
+      // `op read … | keybay set --stdin key` with a silently failing producer
+      // exits 0 without pipefail; accepting the empty read would replace a
+      // real credential with the empty string.
+      for (final bytes in <List<int>>[
+        const <int>[],
+        utf8.encode('\n'),
+        utf8.encode('\r\n'),
+      ]) {
+        expect(
+          () => decodeSecretBytes(bytes),
+          throwsA(
+            isA<SecretInputException>().having(
+              (error) => error.message,
+              'message',
+              contains('empty'),
+            ),
+          ),
+        );
+      }
     });
 
     test('rejects malformed UTF-8 and NUL without echoing input', () {
@@ -92,6 +112,30 @@ void main() {
           ),
         ),
       );
+    });
+
+    test('--stdin refuses a terminal so the secret is never echoed', () async {
+      // The mirror of the interactive branch's TTY requirement: typing into
+      // `--stdin` at a terminal would echo the secret into scrollback.
+      final terminal = _FakeTerminal(hasTerminal: true, echoMode: true);
+      final reader = SecretInputReader(
+        input: const Stream<List<int>>.empty(),
+        terminal: terminal,
+        stderr: StringBuffer(),
+      );
+
+      await expectLater(
+        reader.read(key: 'acme/key', fromStdin: true),
+        throwsA(
+          isA<SecretInputException>().having(
+            (error) => error.message,
+            'guidance',
+            contains('drop --stdin'),
+          ),
+        ),
+      );
+      // Refused before any read or echo manipulation.
+      expect(terminal.setCalls, isEmpty);
     });
 
     test('interactive mode refuses redirected stdin', () async {

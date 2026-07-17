@@ -133,10 +133,89 @@ def main() -> int:
         if b"sentinel" in malformed_input.stderr:
             raise AssertionError("stdin diagnostic echoed secret input")
 
+        # An empty pipe (a silently failed producer) must not store "".
+        empty_input = subprocess.run(
+            [cli, "set", "--stdin", "acme/key"],
+            input=b"",
+            capture_output=True,
+            check=False,
+        )
+        if empty_input.returncode != 2:
+            raise AssertionError(f"empty input status was {empty_input.returncode}")
+        if b"empty" not in empty_input.stderr:
+            raise AssertionError(f"empty input diagnostic: {empty_input.stderr!r}")
+
+        # --stdin at a terminal would echo the typed secret into scrollback;
+        # it must refuse before reading anything.
+        stdin_tty_pid, stdin_tty_master = pty.fork()
+        if stdin_tty_pid == 0:
+            os.execl(cli, cli, "set", "--stdin", "acme/key")
+        stdin_tty_output = read_pty(stdin_tty_master, b"drop --stdin")
+        _, stdin_tty_status = os.waitpid(stdin_tty_pid, 0)
+        if os.waitstatus_to_exitcode(stdin_tty_status) != 2:
+            raise AssertionError(
+                f"--stdin at a TTY exited {os.waitstatus_to_exitcode(stdin_tty_status)}: "
+                f"{stdin_tty_output!r}"
+            )
+        os.close(stdin_tty_master)
+
         inherited = dict(os.environ)
         inherited["KEYBAY_LITERAL"] = "from-parent"
         result = run(cli, mixed, "printenv", "KEYBAY_LITERAL", env=inherited)
         assert_result(result, 0, stdout="from-manifest\n")
+
+        # Parent variables that are not valid UTF-8 (legal in POSIX; dropped
+        # entirely by Dart's Platform.environment) pass through byte-exact —
+        # the executor builds the child environment from raw environ.
+        raw_env = dict(os.environ)
+        raw_env["KEYBAY_RAW_BYTES"] = b"pre\xffpost".decode(
+            "utf-8", "surrogateescape"
+        )
+        result = run(
+            cli,
+            empty,
+            "sh",
+            "-c",
+            "printenv KEYBAY_RAW_BYTES | od -An -tx1",
+            env=raw_env,
+        )
+        raw_hex = "".join(result.stdout.split())
+        if result.returncode != 0 or raw_hex != "707265ff706f73740a":
+            raise AssertionError(
+                f"non-UTF-8 parent value did not pass through byte-exact: "
+                f"status={result.returncode} hex={raw_hex!r}"
+            )
+
+        # A manifest overlay still replaces a byte-shadowed parent entry.
+        raw_overlay_env = dict(os.environ)
+        raw_overlay_env["KEYBAY_LITERAL"] = b"raw\xffparent".decode(
+            "utf-8", "surrogateescape"
+        )
+        result = run(
+            cli, mixed, "printenv", "KEYBAY_LITERAL", env=raw_overlay_env
+        )
+        assert_result(result, 0, stdout="from-manifest\n")
+
+        # The child starts with shell-default signal state: the VM's ignored
+        # SIGPIPE is reset (a pipeline member dies 141, not an EPIPE error) and
+        # the VM's blocked job-control signals are unmasked.
+        result = run(
+            cli,
+            empty,
+            "sh",
+            "-c",
+            "(yes 2>/dev/null; echo rc=$? >&2) | head -n 1 >/dev/null",
+        )
+        assert_result(result, 0, stderr_contains="rc=141")
+        result = run(
+            cli,
+            empty,
+            sys.executable,
+            "-c",
+            "import signal;"
+            "print(len(signal.pthread_sigmask(signal.SIG_BLOCK, set())))",
+        )
+        assert_result(result, 0, stdout="0\n")
 
         result = run(cli, mixed, "/usr/bin/printf", "%s:%s", "argv", "kept")
         assert_result(result, 0, stdout="argv:kept")

@@ -18,3 +18,11 @@ doc/ecosystem-comparison.md
 doc/research-agenda.md
 doc/implementation-plan.md
 doc/headless-implementation-plan.md
+
+# Local build output (Flutter example test runs drop artifacts here). A
+# .pubignore REPLACES .gitignore for publish filtering, so without this line a
+# hand-run `dart pub publish` from the repo root would sweep stray build
+# artifacts into the archive. The normative publish path — the git-archive
+# allowlist in tool/stage_core_publish.sh — can never include untracked files;
+# this keeps the bypass path equally clean.
+build/

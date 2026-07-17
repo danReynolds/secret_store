@@ -31,7 +31,7 @@ jobs:
           tag_object="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$GITHUB_REF_NAME" --jq .object.sha)"
           tag_verified="$(gh api "repos/$GITHUB_REPOSITORY/git/tags/$tag_object" --jq .verification.verified)"
           test "$tag_verified" = "true"
-      - run: dart pub get
+      - run: dart pub get --enforce-lockfile
       - run: dart format --output=none --set-exit-if-changed .
       - run: dart analyze --fatal-infos
       - run: dart test -x integration
@@ -54,7 +54,7 @@ jobs:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       - uses: dart-lang/setup-dart@65eb853c7ba17dde3be364c3d2858773e7144260 # v1.7.2
       - run: sudo apt-get update && sudo apt-get install -y libsecret-tools gnome-keyring dbus
-      - run: dart pub get
+      - run: dart pub get --enforce-lockfile
       - name: compile and package
         run: |
           version="${GITHUB_REF_NAME#keybay_cli-v}"
@@ -97,7 +97,7 @@ jobs:
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       - uses: dart-lang/setup-dart@65eb853c7ba17dde3be364c3d2858773e7144260 # v1.7.2
-      - run: dart pub get
+      - run: dart pub get --enforce-lockfile
       - name: compile release and continuity binaries
         run: |
           mkdir -p build/cli artifacts
@@ -376,7 +376,7 @@ jobs:
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       - uses: dart-lang/setup-dart@65eb853c7ba17dde3be364c3d2858773e7144260 # v1.7.2
-      - run: dart pub get
+      - run: dart pub get --enforce-lockfile
         working-directory: packages/keybay_cli
       - run: ./tool/validate_publish.sh packages/keybay_cli ffi keybay
       - name: record manual first-publication bootstrap

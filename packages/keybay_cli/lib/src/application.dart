@@ -21,10 +21,17 @@ typedef SecretValueReader =
     Future<String> Function({required String key, required bool fromStdin});
 
 abstract interface class CommandExecutor {
+  /// Replaces this process with [executable]. [environment] is the resolved
+  /// string-level view (parent + manifest) used for the CLI's own lookups
+  /// (PATH search); [overlay] is exactly the manifest-named subset the
+  /// executor must materialize — every other parent variable passes through
+  /// byte-exact from the raw process `environ` (see
+  /// [EnvironmentResolution.overlay]).
   Future<int> execute({
     required String executable,
     required List<String> arguments,
     required Map<String, String> environment,
+    required Map<String, String> overlay,
   });
 }
 
@@ -116,6 +123,7 @@ final class CliApplication {
       executable: command.executable,
       arguments: command.arguments,
       environment: resolution.environment,
+      overlay: resolution.overlay,
     );
   }
 

@@ -49,6 +49,18 @@ final class SecretInputReader {
 
   Future<String> read({required String key, required bool fromStdin}) async {
     if (fromStdin) {
+      // The mirror of the interactive branch's TTY requirement below. Typing
+      // into `--stdin` at a terminal would echo the secret into the terminal
+      // and its scrollback — exactly the casual disclosure the threat model
+      // rules out — so the piped mode refuses a terminal rather than reading
+      // from it. (Redirected input — a pipe, file, or heredoc — is never a
+      // terminal, so every automation shape still works.)
+      if (terminal.hasTerminal) {
+        throw const SecretInputException(
+          '--stdin expects piped input but stdin is a terminal; drop --stdin '
+          'to be prompted with input hidden',
+        );
+      }
       return decodeSecretBytes(await _readToEnd(input));
     }
     if (!terminal.hasTerminal) {
@@ -112,13 +124,23 @@ String decodeSecretBytes(List<int> bytes) {
       'secret input contains a NUL character; provide text without NUL',
     );
   }
-  if (value.endsWith('\r\n')) {
-    return value.substring(0, value.length - 2);
+  final stripped = switch (value) {
+    _ when value.endsWith('\r\n') => value.substring(0, value.length - 2),
+    _ when value.endsWith('\n') => value.substring(0, value.length - 1),
+    _ => value,
+  };
+  // An empty read is a failed producer (`op read … | keybay set --stdin` with
+  // the producer printing nothing exits 0 without pipefail), or a bare Enter
+  // at the prompt — not a credential. Storing it would silently replace a real
+  // value with the empty string, so it fails loudly instead. A genuine 0-byte
+  // value remains expressible through the bytes-first library API.
+  if (stripped.isEmpty) {
+    throw const SecretInputException(
+      'secret input is empty; refusing to store an empty value (a failed '
+      'producer in a pipeline must not silently replace a stored secret)',
+    );
   }
-  if (value.endsWith('\n')) {
-    return value.substring(0, value.length - 1);
-  }
-  return value;
+  return stripped;
 }
 
 Future<Uint8List> _readToEnd(Stream<List<int>> input) async {

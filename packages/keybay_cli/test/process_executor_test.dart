@@ -1,3 +1,6 @@
+import 'dart:convert';
+import 'dart:typed_data';
+
 import 'package:keybay_cli/src/process_executor.dart';
 import 'package:test/test.dart';
 
@@ -16,11 +19,13 @@ void main() {
           'PATH': ':relative-bin::/usr/bin:',
           'SECRET': 'environment-only',
         };
+        const overlay = <String, String>{'INJECTED': 'from-manifest'};
 
         final result = await executor.execute(
           executable: 'tool',
           arguments: const <String>['--flag', 'argument'],
           environment: environment,
+          overlay: overlay,
         );
 
         expect(result, 127);
@@ -31,7 +36,10 @@ void main() {
         for (final call in system.calls) {
           expect(call.arguments, <String>['tool', '--flag', 'argument']);
           expect(call.arguments, isNot(contains('environment-only')));
-          expect(call.environment, environment);
+          // Only the manifest overlay crosses the exec seam as strings; the
+          // parent environment flows through raw environ, never re-encoded.
+          expect(call.overlay, overlay);
+          expect(call.overlay.values, isNot(contains('environment-only')));
         }
         expect(stderr.toString(), '''
 error: command not found: tool
@@ -54,6 +62,7 @@ Fix PATH or use an absolute command path.
             executable: 'tool',
             arguments: const <String>[],
             environment: environment,
+            overlay: const <String, String>{},
           ),
           127,
         );
@@ -76,6 +85,7 @@ Fix PATH or use an absolute command path.
           executable: 'tool',
           arguments: const <String>[],
           environment: const <String, String>{'PATH': '/one:/two:/three'},
+          overlay: const <String, String>{},
         ),
         126,
       );
@@ -105,6 +115,7 @@ Check the command's executable permission and format.
               executable: 'tool',
               arguments: const <String>[],
               environment: const <String, String>{'PATH': '/one:/two'},
+              overlay: const <String, String>{},
             ),
             126,
           );
@@ -131,6 +142,7 @@ Check the command's executable permission and format.
           executable: './bin/tool',
           arguments: const <String>['arg'],
           environment: const <String, String>{'PATH': '/must/not/use'},
+          overlay: const <String, String>{},
         ),
         127,
       );
@@ -152,10 +164,56 @@ Check the command's executable permission and format.
             executable: '/bin/tool',
             arguments: const <String>[],
             environment: const <String, String>{},
+            overlay: const <String, String>{},
           ),
           126,
         );
       }
+    });
+  });
+
+  group('overlayShadowsEnvEntry (raw environ passthrough)', () {
+    List<Uint8List> names(List<String> values) => <Uint8List>[
+      for (final value in values) utf8.encode(value),
+    ];
+
+    Uint8List entry(List<int> bytes) => Uint8List.fromList(bytes);
+
+    test('matches exactly the overlaid name, not prefixes or suffixes', () {
+      final overlay = names(<String>['INJECTED']);
+      expect(
+        overlayShadowsEnvEntry(utf8.encode('INJECTED=old'), overlay),
+        isTrue,
+      );
+      expect(overlayShadowsEnvEntry(utf8.encode('INJECTED='), overlay), isTrue);
+      expect(
+        overlayShadowsEnvEntry(utf8.encode('INJECTED_2=x'), overlay),
+        isFalse,
+      );
+      expect(overlayShadowsEnvEntry(utf8.encode('INJECT=x'), overlay), isFalse);
+      expect(overlayShadowsEnvEntry(utf8.encode('OTHER=x'), overlay), isFalse);
+    });
+
+    test('a non-UTF-8 parent value cannot hide a shadowed name', () {
+      // NAME=<0xff> — the value bytes are irrelevant to the name match.
+      final raw = entry(<int>[...utf8.encode('INJECTED='), 0xff]);
+      expect(overlayShadowsEnvEntry(raw, names(<String>['INJECTED'])), isTrue);
+    });
+
+    test('a non-UTF-8 parent NAME never matches an overlay name', () {
+      final raw = entry(<int>[0xff, 0x3d, 0x78]); // <0xff>=x
+      expect(overlayShadowsEnvEntry(raw, names(<String>['X'])), isFalse);
+    });
+
+    test('an entry without = passes through even when it equals a name', () {
+      expect(
+        overlayShadowsEnvEntry(utf8.encode('INJECTED'), names(['INJECTED'])),
+        isFalse,
+      );
+      expect(
+        overlayShadowsEnvEntry(entry(const <int>[]), names(['X'])),
+        isFalse,
+      );
     });
   });
 }
@@ -164,13 +222,13 @@ final class _ExecveCall {
   _ExecveCall({
     required this.path,
     required List<String> arguments,
-    required Map<String, String> environment,
+    required Map<String, String> overlay,
   }) : arguments = List<String>.of(arguments),
-       environment = Map<String, String>.of(environment);
+       overlay = Map<String, String>.of(overlay);
 
   final String path;
   final List<String> arguments;
-  final Map<String, String> environment;
+  final Map<String, String> overlay;
 }
 
 final class _FakeExecveSystem implements ExecveSystem {
@@ -187,11 +245,9 @@ final class _FakeExecveSystem implements ExecveSystem {
   int execve({
     required String path,
     required List<String> arguments,
-    required Map<String, String> environment,
+    required Map<String, String> overlay,
   }) {
-    calls.add(
-      _ExecveCall(path: path, arguments: arguments, environment: environment),
-    );
+    calls.add(_ExecveCall(path: path, arguments: arguments, overlay: overlay));
     _errno = errors[path] ?? 2;
     return -1;
   }

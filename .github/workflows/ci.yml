@@ -35,7 +35,12 @@ jobs:
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       - uses: dart-lang/setup-dart@65eb853c7ba17dde3be364c3d2858773e7144260 # v1.7.2
-      - run: dart pub get
+      # --enforce-lockfile wherever the committed lock is satisfiable: the
+      # content-hashed lock is the reviewed dependency set, and plain pub get
+      # silently re-resolves from pub.dev when it can't honor the lock —
+      # unreviewed code running in CI (or worse, a release build) with no red
+      # signal. The one deliberate exception is cli-minimum-sdk below.
+      - run: dart pub get --enforce-lockfile
       - run: dart format --output=none --set-exit-if-changed .
       - run: dart analyze --fatal-infos
       # Unit tier (hermetic): crypto vectors, container/fuzz, POSIX perms,
@@ -59,6 +64,12 @@ jobs:
       - uses: dart-lang/setup-dart@65eb853c7ba17dde3be364c3d2858773e7144260 # v1.7.2
         with:
           sdk: 3.10.0
+      # Deliberately NOT --enforce-lockfile: the committed lock's dev-dep SDK
+      # bound (>=3.11.0) cannot be satisfied on the 3.10 floor, so this lane
+      # re-resolves dev dependencies fresh by design — it exists to prove the
+      # CLI on its documented SDK floor, not to pin the toolchain. The runtime
+      # closure stays exact-pinned by pubspec either way, and every other lane
+      # enforces the lock.
       - run: dart pub get
       # The CLI's documented SDK floor is a tested product channel, including
       # AOT/exec/PTY behavior, not only a pubspec constraint. Dart 3.10's
@@ -72,7 +83,7 @@ jobs:
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       - uses: dart-lang/setup-dart@65eb853c7ba17dde3be364c3d2858773e7144260 # v1.7.2
-      - run: dart pub get
+      - run: dart pub get --enforce-lockfile
       # Real login Keychain round-trip.
       - run: KEYBAY_INTEGRATION=1 dart test test/keychain_integration_test.dart
       - run: ./tool/test_cli_storage.sh
@@ -88,7 +99,7 @@ jobs:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       - uses: dart-lang/setup-dart@65eb853c7ba17dde3be364c3d2858773e7144260 # v1.7.2
       - run: sudo apt-get update && sudo apt-get install -y libsecret-tools gnome-keyring dbus
-      - run: dart pub get
+      - run: dart pub get --enforce-lockfile
       # Real Secret Service round-trip: a throwaway D-Bus session with a fresh
       # gnome-keyring unlocked by a known password (secrets component only).
       # Recipe verified locally against real gnome-keyring in a Docker container.

@@ -41,7 +41,16 @@ jobs:
           tag_object="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$GITHUB_REF_NAME" --jq .object.sha)"
           tag_verified="$(gh api "repos/$GITHUB_REPOSITORY/git/tags/$tag_object" --jq .verification.verified)"
           test "$tag_verified" = "true"
-      - run: dart pub get
+      - run: dart pub get --enforce-lockfile
+      # Prove the tagged ref itself. The ancestry check above passes the
+      # moment a commit lands on main — even before that commit's own CI has
+      # finished — and branch protection is a repo setting this workflow
+      # cannot see. So the unit tier (dependency-closure snapshot, crypto
+      # vector firewall, container fuzz) re-runs here against the exact bytes
+      # being published, mirroring release_cli.yml's validate job.
+      - run: dart format --output=none --set-exit-if-changed .
+      - run: dart analyze --fatal-infos
+      - run: dart test -x integration
       - run: ./tool/validate_publish.sh . cryptography ffi
       - name: stage core package without workspace-only files
         run: ./tool/stage_core_publish.sh "$RUNNER_TEMP/keybay-core-publish"

@@ -77,6 +77,13 @@ void main() {
         'UNCHANGED': 'yes',
         'EMPTY': '',
       });
+      // The overlay is exactly the manifest's entries: the executor
+      // materializes these and passes the rest of the parent environment
+      // through byte-exact from raw environ.
+      expect(executor.calls.single.overlay, <String, String>{
+        'API_URL': 'https://example.test',
+        'EMPTY': '',
+      });
       expect(stdout.toString(), isEmpty);
       expect(stderr.toString(), isEmpty);
     });
@@ -125,6 +132,16 @@ void main() {
         expect(
           executor.calls.single.environment.values,
           isNot(contains('other-value')),
+        );
+        expect(executor.calls.single.overlay, <String, String>{
+          'OPENAI_API_KEY': 'project-value',
+          'OPENAI_ALIAS': 'project-value',
+          'STRIPE_KEY': 'shared-value',
+          'LOG_LEVEL': 'debug',
+        });
+        expect(
+          executor.calls.single.overlay.keys,
+          isNot(contains('PARENT_ONLY')),
         );
       },
     );
@@ -541,12 +558,15 @@ final class _ExecutionCall {
     required this.executable,
     required List<String> arguments,
     required Map<String, String> environment,
+    required Map<String, String> overlay,
   }) : arguments = List<String>.of(arguments),
-       environment = Map<String, String>.of(environment);
+       environment = Map<String, String>.of(environment),
+       overlay = Map<String, String>.of(overlay);
 
   final String executable;
   final List<String> arguments;
   final Map<String, String> environment;
+  final Map<String, String> overlay;
 }
 
 final class _FakeCommandExecutor implements CommandExecutor {
@@ -558,12 +578,14 @@ final class _FakeCommandExecutor implements CommandExecutor {
     required String executable,
     required List<String> arguments,
     required Map<String, String> environment,
+    required Map<String, String> overlay,
   }) async {
     calls.add(
       _ExecutionCall(
         executable: executable,
         arguments: arguments,
         environment: environment,
+        overlay: overlay,
       ),
     );
     return result;

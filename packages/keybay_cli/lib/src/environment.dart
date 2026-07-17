@@ -16,13 +16,27 @@ final class StoredValueException implements Exception {
 final class EnvironmentResolution {
   EnvironmentResolution({
     required Map<String, String> environment,
+    required Map<String, String> overlay,
     required List<String> missingKeys,
     required this.referenceCount,
     required this.missingReferenceCount,
   }) : environment = Map<String, String>.unmodifiable(environment),
+       overlay = Map<String, String>.unmodifiable(overlay),
        missingKeys = List<String>.unmodifiable(missingKeys);
 
+  /// The parent environment with [overlay] applied. Used for lookups the CLI
+  /// performs itself (PATH search); the child's actual environment is built
+  /// from the raw process `environ` plus [overlay], because this string-level
+  /// merge is lossy for variables Dart cannot represent (see [overlay]).
   final Map<String, String> environment;
+
+  /// Exactly the variables the manifest names, fully resolved. The executor
+  /// materializes these and passes every *other* parent variable through
+  /// byte-exact from the raw `environ` — `Platform.environment` silently drops
+  /// entries whose value is not valid UTF-8 (verified), so a string-level
+  /// rebuild of the whole child environment would delete them.
+  final Map<String, String> overlay;
+
   final List<String> missingKeys;
   final int referenceCount;
   final int missingReferenceCount;
@@ -44,6 +58,7 @@ EnvironmentResolution resolveEnvironment({
   required Map<String, Uint8List> storedValues,
 }) {
   final environment = <String, String>{...parentEnvironment};
+  final overlay = <String, String>{};
   final missingKeys = <String>[];
   final seenMissingKeys = <String>{};
   var referenceCount = 0;
@@ -53,6 +68,7 @@ EnvironmentResolution resolveEnvironment({
     switch (entry.value) {
       case LiteralManifestValue(:final value):
         environment[entry.key] = value;
+        overlay[entry.key] = value;
       case SecretManifestValue(:final key):
         referenceCount++;
         final bytes = storedValues[key];
@@ -61,12 +77,15 @@ EnvironmentResolution resolveEnvironment({
           if (seenMissingKeys.add(key)) missingKeys.add(key);
           continue;
         }
-        environment[entry.key] = _decodeStoredValue(key, bytes);
+        final decoded = _decodeStoredValue(key, bytes);
+        environment[entry.key] = decoded;
+        overlay[entry.key] = decoded;
     }
   }
 
   return EnvironmentResolution(
     environment: environment,
+    overlay: overlay,
     missingKeys: missingKeys,
     referenceCount: referenceCount,
     missingReferenceCount: missingReferenceCount,
