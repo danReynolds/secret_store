@@ -5,6 +5,31 @@ This is the operational companion to
 not complete merely because a tag exists: every receipt below is part of the
 security and installation contract.
 
+## Versioning and the release tool
+
+The `keybay` core library and the `keybay_cli` executable version in **lockstep**.
+Four references must carry the same version — the core `pubspec.yaml`, the CLI
+`pubspec.yaml`, the CLI's exact `keybay:` dependency pin, and the `cliVersion`
+constant (what `keybay --version` prints). `tool/release.dart` keeps them
+synchronized and turns tagging into one intentional command:
+
+```sh
+dart run tool/release.dart status              # show every reference + changelog state
+dart run tool/release.dart check               # assert all four agree (CI runs this too)
+dart run tool/release.dart bump minor          # or: set 0.2.0 — write one version to all four
+dart run tool/release.dart publish core        # sign a tag on HEAD and push it
+dart run tool/release.dart publish both        # core first, then the CLI
+```
+
+`publish` refuses unless every reference agrees, the tree is clean, `HEAD` is
+contained in `origin/main`, the matching `CHANGELOG.md` carries the version, and
+the tag does not already exist; `--dry-run` previews and `--yes` skips the
+prompt. It only creates and pushes the signed tag — the workflows below do the
+building, signing, and publishing. `both` tags core first because the CLI pins,
+and pub.dev requires, an already-published core version. Drift is also caught in
+CI by `test/version_consistency_test.dart`, so a forgotten `cliVersion` bump
+fails a pull request rather than a half-finished release.
+
 ## One-time owner setup
 
 1. Protect `main` before adding release credentials:
