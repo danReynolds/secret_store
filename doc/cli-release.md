@@ -11,33 +11,57 @@ The `keybay` core library and the `keybay_cli` executable version in **lockstep*
 Four references must carry the same version — the core `pubspec.yaml`, the CLI
 `pubspec.yaml`, the CLI's exact `keybay:` dependency pin, and the `cliVersion`
 constant (what `keybay --version` prints). `tool/release.dart` keeps them
-synchronized and turns tagging into one intentional command:
-
-```sh
-dart run tool/release.dart status              # show every reference + changelog state
-dart run tool/release.dart check               # assert all four agree (CI runs this too)
-dart run tool/release.dart bump minor          # or: set 0.2.0 — write one version to all four
-dart run tool/release.dart publish core        # sign a tag on HEAD and push it
-dart run tool/release.dart publish both        # core first, then the CLI
-```
-
-For a shorter invocation, install the `tool/keybay-release` launcher onto your
-PATH — it resolves the tool from the current checkout, so it always runs the
-working tree's source and follows worktrees:
+synchronized. Install the launcher once, from any checkout:
 
 ```sh
 cp tool/keybay-release ~/.pub-cache/bin/keybay-release && chmod +x ~/.pub-cache/bin/keybay-release
-keybay-release status   # then, from anywhere inside a keybay checkout
 ```
 
-`publish` refuses unless every reference agrees, the tree is clean, `HEAD` is
-contained in `origin/main`, the matching `CHANGELOG.md` carries the version, and
-the tag does not already exist; `--dry-run` previews and `--yes` skips the
-prompt. It only creates and pushes the signed tag — the workflows below do the
-building, signing, and publishing. `both` tags core first because the CLI pins,
-and pub.dev requires, an already-published core version. Drift is also caught in
-CI by `test/version_consistency_test.dart`, so a forgotten `cliVersion` bump
-fails a pull request rather than a half-finished release.
+**Everyday release — one command, then merge:**
+
+```sh
+keybay-release release minor      # or: release patch / release 0.2.0
+```
+
+That bumps all four references, adds `## 0.2.0` changelog stubs, commits, pushes
+a `release/v0.2.0` branch, and opens a PR to `main`. Fill in the changelog notes
+on the PR, then **merge it**. Merging lands the bump on `main`, where
+`release_on_merge.yml` creates the signed `v0.2.0` and `keybay_cli-v0.2.0` tags,
+which trigger `publish.yml` and `release_cli.yml`. Approve the gated `release`
+and `pub.dev` environments and the release publishes to pub.dev and Homebrew.
+Everything the tool touches is version metadata; the workflows do all building,
+signing, and publishing.
+
+**Merge-trigger prerequisite — `RELEASE_TAG_TOKEN`.** GitHub deliberately
+prevents the default Actions token from triggering other workflows, so
+`release_on_merge.yml` creates the tags with a repository secret named
+`RELEASE_TAG_TOKEN`: a fine-grained PAT scoped to **Contents: read and write** on
+`danReynolds/keybay`, or a GitHub App installation token with the same scope (the
+App is the higher-security option — short-lived, no user tie). The tags are
+created through the API so GitHub web-flow signs them (the publish workflows
+require a verified tag). Without the token, the workflow fails loudly on the
+first bumped version rather than silently not releasing — and you can always fall
+back to tagging by hand with `keybay-release publish both`. Auto-release only
+does anything once the one-time first-publish bootstrap below is done and trusted
+publishing is enabled; before that, a brand-new version still routes to a manual
+publish.
+
+**Other commands:**
+
+```sh
+keybay-release status     # every reference + changelog state
+keybay-release check      # assert all four agree (CI enforces this too)
+keybay-release publish core|cli|both   # tag HEAD directly, bypassing the PR flow
+```
+
+`publish` is the manual escape hatch and the first-publish bootstrap path: it
+signs a tag on HEAD and pushes it, refusing unless every reference agrees, the
+tree is clean, `HEAD` is on `origin/main`, the `CHANGELOG.md` carries the version,
+and the tag is unused (`--dry-run` previews, `--yes` skips the prompt). `both`
+tags core first because the CLI pins, and pub.dev requires, an already-published
+core version. Drift is also caught in CI by
+`test/version_consistency_test.dart`, so a forgotten `cliVersion` bump fails a
+pull request rather than a half-finished release.
 
 ## One-time owner setup
 

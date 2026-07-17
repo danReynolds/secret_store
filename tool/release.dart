@@ -140,6 +140,23 @@ bool changelogHasEntry(String content, String version) =>
     RegExp('^##[ \\t]+${RegExp.escape(version)}\\b', multiLine: true)
         .hasMatch(content);
 
+/// Inserts a `## <version>` stub before the first existing `## ` heading (or
+/// after a leading `# ` title), so a fresh release PR carries a slot to fill.
+/// Returns [content] unchanged when the version already has an entry.
+String insertChangelogStub(String content, String version) {
+  if (changelogHasEntry(content, version)) return content;
+  final stub = '## $version\n\n- _Summarize the changes in $version._\n\n';
+  final firstEntry = RegExp(r'^## ', multiLine: true).firstMatch(content);
+  if (firstEntry != null) {
+    return content.replaceRange(firstEntry.start, firstEntry.start, stub);
+  }
+  final title = RegExp(r'^# .*\n', multiLine: true).firstMatch(content);
+  if (title != null) {
+    return content.replaceRange(title.end, title.end, '\n$stub');
+  }
+  return '$stub$content';
+}
+
 // ---------------------------------------------------------------------------
 // Workspace layout.
 // ---------------------------------------------------------------------------
@@ -330,6 +347,95 @@ void _publish(String root, String target,
       'publish — see doc/cli-release.md.');
 }
 
+void _releaseCommand(String root, String arg, {required bool dryRun}) {
+  final current = _agreedVersion(_readAll(root)); // fails closed on drift
+  final next = RegExp(r'^\d+\.\d+\.\d+$').hasMatch(arg)
+      ? Version.parse(arg)
+      : current.bump(arg);
+  final version = next.toString();
+  final branch = 'release/v$version';
+
+  if (!dryRun) {
+    _requireCleanTree(root);
+    final onBranch =
+        _gitOut(root, <String>['rev-parse', '--abbrev-ref', 'HEAD']);
+    if (onBranch != 'main') {
+      _fail('run `release` from an up-to-date main (currently on "$onBranch")');
+    }
+    if (_git(root, <String>['rev-parse', '--verify', 'refs/heads/$branch'])
+            .exitCode ==
+        0) {
+      _fail('branch $branch already exists');
+    }
+  }
+
+  stdout.writeln('${dryRun ? '(dry-run) ' : ''}release $current -> $version');
+  for (final field in VersionField.values) {
+    final path = '$root/${_fieldFiles[field]}';
+    final after =
+        setVersionField(File(path).readAsStringSync(), field, version);
+    if (!dryRun) File(path).writeAsStringSync(after);
+  }
+  stdout.writeln('  synchronized all four version references to $version');
+  for (final relative in <String>[_coreChangelog, _cliChangelog]) {
+    final path = '$root/$relative';
+    final before = File(path).readAsStringSync();
+    final after = insertChangelogStub(before, version);
+    if (before != after) {
+      if (!dryRun) File(path).writeAsStringSync(after);
+      stdout.writeln('  added a "## $version" changelog stub to $relative');
+    }
+  }
+
+  if (dryRun) {
+    stdout.writeln('  would branch $branch, commit, push, and open a PR to '
+        'main titled "Release $version"');
+    stdout.writeln('(dry-run) nothing written, no branch, no PR');
+    return;
+  }
+
+  _gitCheck(root, <String>['checkout', '-b', branch], 'create branch');
+  _gitCheck(root, <String>['add', '-A'], 'stage changes');
+  _gitCheck(root, <String>['commit', '-m', 'Release $version'], 'commit');
+  _gitCheck(root, <String>['push', '-u', 'origin', branch], 'push branch');
+  final pr = Process.runSync(
+      'gh',
+      <String>[
+        'pr',
+        'create',
+        '--base',
+        'main',
+        '--head',
+        branch,
+        '--title',
+        'Release $version',
+        '--body',
+        _releasePrBody(version),
+      ],
+      workingDirectory: root);
+  if (pr.exitCode != 0) {
+    _fail('gh pr create failed (is the GitHub CLI installed and authed?):\n'
+        '${_text(pr.stderr)}');
+  }
+  stdout.writeln(_text(pr.stdout));
+  stdout.writeln('\nOpened the release PR. Fill in the "## $version" changelog '
+      'notes, then merge — the release-on-merge workflow tags $version and CI '
+      'publishes to pub.dev + Homebrew (after you approve the gated '
+      'environments).');
+}
+
+String _releasePrBody(String version) => '''
+Release $version. Version synchronized across both packages by `tool/release.dart`.
+
+Before merging, replace the `## $version` changelog placeholders in
+`CHANGELOG.md` and `packages/keybay_cli/CHANGELOG.md` with real notes.
+
+Merging this tags `v$version` and `keybay_cli-v$version` via the
+release-on-merge workflow, which triggers `publish.yml` and `release_cli.yml`.
+Approve the gated `release` and `pub.dev` environments to publish to pub.dev and
+Homebrew.
+''';
+
 // ---------------------------------------------------------------------------
 // git + terminal helpers.
 // ---------------------------------------------------------------------------
@@ -356,6 +462,13 @@ String _gitOut(String root, List<String> args) {
     _fail('git ${args.join(' ')} failed: ${_text(result.stderr)}');
   }
   return _text(result.stdout);
+}
+
+void _gitCheck(String root, List<String> args, String what) {
+  final result = _git(root, args);
+  if (result.exitCode != 0) {
+    _fail('$what failed (git ${args.first}): ${_text(result.stderr)}');
+  }
 }
 
 void _requireCleanTree(String root) {
@@ -413,15 +526,20 @@ Usage: dart run tool/release.dart <command> [options]
   check                        Assert all four references agree (exit 1 on drift).
   set <x.y.z>                  Write one version to all four references.
   bump <major|minor|patch>     Increment the agreed version across all references.
-  publish <core|cli|both>      Sign a tag on HEAD and push it, triggering release.
+  release <part|x.y.z>         bump + changelog stubs + commit + push + open a PR.
+                               Merging the PR triggers the release (needs the
+                               release-on-merge workflow + RELEASE_TAG_TOKEN).
+  publish <core|cli|both>      Sign a tag on HEAD and push it directly (the manual
+                               path, e.g. the one-time first-publish bootstrap).
 
 Options:
   --dry-run                    Show what would happen; write nothing, tag nothing.
   --yes, -y                    Skip the publish confirmation prompt.
   --help, -h                   Show this help.
 
-The two packages version in lockstep. `both` tags core first — the CLI pins, and
-pub.dev requires, an already-published core version.
+The two packages version in lockstep. `release` is the everyday flow (one command
+to a PR, then merge); `publish both` tags core first — the CLI pins, and pub.dev
+requires, an already-published core version.
 ''';
 
 void main(List<String> args) {
@@ -464,6 +582,9 @@ void main(List<String> args) {
       case 'bump':
         if (rest.length != 1) _fail('usage: bump <major|minor|patch>');
         _bump(root, rest.first, dryRun: dryRun);
+      case 'release':
+        if (rest.length != 1) _fail('usage: release <major|minor|patch|x.y.z>');
+        _releaseCommand(root, rest.first, dryRun: dryRun);
       case 'publish':
         if (rest.length != 1) _fail('usage: publish <core|cli|both>');
         _publish(root, rest.first, dryRun: dryRun, yes: yes);
