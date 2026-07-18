@@ -159,6 +159,18 @@ jobs:
       - name: prove signed-build Keychain access continuity
         run: |
           sentinel="release-continuity-${GITHUB_RUN_ID}-${{ matrix.arch }}"
+          # codesign (above) is done and explicitly targeted --keychain, so the
+          # temporary signing keychain is no longer needed. Drop it from the
+          # search list so this check runs against the LOGIN keychain — the
+          # real-world store the code-identity contract is actually about. With
+          # the temp keychain prepended, `keybay set` wrote the store key into
+          # it and the second binary's search skipped that keychain (its
+          # random password is unknown to the reader / it re-locks), so the key
+          # read back as absent (StoreKeyMissing). Both binaries now share the
+          # one unlocked login keychain.
+          login_keychain="$(security default-keychain -d user | sed -E 's/^[[:space:]]*"//; s/"[[:space:]]*$//')"
+          security list-keychains -d user -s "$login_keychain"
+          echo "continuity keychain search list:"; security list-keychains -d user
           printf '%s' "$sentinel" | \
             build/cli/keybay set --stdin release-check/token
           listed="$(build/cli/keybay-continuity keybay-cli list)"
