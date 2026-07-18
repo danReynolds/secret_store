@@ -24,8 +24,25 @@ invokes a shell or stays resident as a wrapper.
 
 ## Install
 
-`0.1.0` is not published yet. From a source checkout, install the current local
-package:
+The signed Homebrew binary is the promoted release channel because its stable
+macOS code identity is part of the login-Keychain access contract:
+
+```sh
+brew install danreynolds/tap/keybay
+```
+
+Or install the native `keybay` executable through Dart:
+
+```sh
+dart install keybay_cli
+```
+
+The Dart channel builds and installs a native `keybay` executable. Dart is
+needed to install or update it, not to launch it afterward. Follow Dart's
+notice if its install-bin directory is not already on `PATH`.
+
+Contributors can run the in-tree package directly from a source checkout
+instead:
 
 ```sh
 dart pub get
@@ -34,19 +51,6 @@ dart pub global activate --source path packages/keybay_cli
 
 For repeated contributor runs without changing global state, use the repository
 runner documented in the [examples guide](example/README.md).
-
-The signed GitHub/Homebrew binary will be the promoted release channel because
-its stable macOS code identity is part of the login-Keychain access contract:
-
-```sh
-# Available after the signed 0.1.0 release, not today:
-brew install danreynolds/tap/keybay
-dart install keybay_cli
-```
-
-The Dart channel builds and installs a native `keybay` executable. Dart is
-needed to install or update it, not to launch it afterward. Follow Dart's
-notice if its install-bin directory is not already on `PATH`.
 
 ### Verify a release download
 

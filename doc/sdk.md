@@ -10,25 +10,19 @@ and Linux desktop, `SecretStorage(appId:)` automatically applies one documented,
 OS-backed storage policy for the current runtime. No Flutter dependency,
 account, Keybay server, resident process, or network path is required.
 
-> **Release candidate:** `0.1.0` has not been published to pub.dev or GitHub
-> Releases yet. The repository is the only working installation source today;
-> hosted and signed-binary commands are intentionally not presented as live.
+> `0.1.0` is published on pub.dev. Add the SDK with `dart pub add keybay`; the
+> CLI ships through Homebrew and `dart install keybay_cli`.
 
 <span id="cli-quickstart"></span>
 The CLI now has a dedicated [guide](../packages/keybay_cli/README.md).
 
 ## SDK quickstart
 
-For pre-release evaluation, clone the repository and use a path dependency
-pinned to the reviewed checkout:
+Add Keybay to your project:
 
-```yaml
-dependencies:
-  keybay:
-    path: ../keybay
+```sh
+dart pub add keybay
 ```
-
-After the signed `0.1.0` release, installation becomes `dart pub add keybay`.
 
 ```dart
 import 'package:keybay/keybay.dart';
@@ -152,9 +146,9 @@ real keystore **code path** end-to-end, not that physical silicon mediated it.
 
 ## Status
 
-`0.1.0` is a pre-release candidate and has not been published. The API and
-on-disk container format may still change; once published, a future `0.2.0`
-may carry breaking changes under pub's pre-1.0 semantics. Implemented and
+`0.1.0` is published on pub.dev. The API and on-disk container format may still
+change; a future `0.2.0` may carry breaking changes under pub's pre-1.0
+semantics. Implemented and
 validated end-to-end against the genuine platform path: macOS (CLI and
 entitled), Linux, iOS, and Android 12+. Windows is unsupported and fails typed.
 Headless operation has no supported backend or availability contract.

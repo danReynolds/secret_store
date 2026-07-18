@@ -6,10 +6,9 @@ name: publish
 # publishes directly from packages/keybay (no staging — it is a plain workspace
 # member, not the workspace root).
 #
-# Pub.dev requires a manual first publication. The signed v0.1.0 tag therefore
-# validates and stages the exact package but deliberately skips OIDC; publish
-# it manually from that tag, enable trusted publishing, then remove the two
-# v0.1.0 bootstrap conditions below. Every later tag publishes through OIDC.
+# 0.1.0 was published manually to bootstrap the package name (pub.dev cannot
+# automate a first publication) and trusted publishing is now enabled, so every
+# tag publishes through OIDC.
 on:
   push:
     tags: ['v[0-9]+.[0-9]+.[0-9]+*']
@@ -55,15 +54,5 @@ jobs:
       - run: dart test -x integration
         working-directory: packages/keybay
       - run: ./tool/validate_publish.sh packages/keybay cryptography ffi
-      - name: record manual first-publication bootstrap
-        if: github.ref_name == 'v0.1.0'
-        run: |
-          echo "::notice title=Manual pub.dev bootstrap required::Publish keybay 0.1.0 manually (dart pub -C packages/keybay publish) from this signed tag, then enable trusted publishing. See doc/cli-release.md."
-          {
-            echo "### Manual pub.dev bootstrap required"
-            echo
-            echo "The signed v0.1.0 source validated, but pub.dev cannot automate a package's first version. Publish it manually from this exact tag (dart pub -C packages/keybay publish), then enable trusted publishing and remove this one-time guard."
-          } >> "$GITHUB_STEP_SUMMARY"
       - name: publish to pub.dev through GitHub OIDC
-        if: github.ref_name != 'v0.1.0'
         run: dart pub -C packages/keybay publish --force
