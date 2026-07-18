@@ -208,10 +208,15 @@ jobs:
             --key-id "$NOTARY_KEY_ID" \
             --issuer "$NOTARY_ISSUER_ID"
           python3 -c 'import json,sys; data=json.load(open(sys.argv[1])); issues=data.get("issues", []); print(json.dumps(issues, indent=2)); raise SystemExit(bool(issues))' "$RUNNER_TEMP/notary-log.json"
-          # Apple publishes a ticket for this standalone Mach-O, but does not
-          # support stapling tickets to standalone binaries. spctl verifies the
-          # accepted online ticket instead.
-          spctl --assess --type execute --verbose=4 build/cli/keybay
+          # Notarization is proven by the Accepted submission status and the
+          # empty issue log above, plus the Developer-ID + hardened-runtime
+          # codesign checks in tool/verify_macos_release.sh (signing step).
+          # There is deliberately no spctl assessment here: Apple does not
+          # staple tickets to a bare Mach-O, and `spctl --assess --type execute`
+          # only assesses application *bundles* — it rejects any standalone
+          # binary as "the code is valid but does not seem to be an app",
+          # regardless of notarization. A CLI executable has no applicable
+          # Gatekeeper-bundle assessment.
           version="${GITHUB_REF_NAME#keybay_cli-v}"
           cp "$RUNNER_TEMP/notary-result.json" \
             "artifacts/keybay-${version}-macos-${{ matrix.arch }}.notary-result.json"
