@@ -52,6 +52,8 @@ jobs:
       - run: dart test -x integration
         working-directory: packages/keybay_cli
       - run: ./tool/test_cli.sh
+      - if: runner.os == 'Linux'
+        run: dart run tool/test_release.dart
       # Exercise the exact package archive and warning contract before a tag.
       # The 3.10 floor predates --ignore-warnings, so this belongs on the
       # current-SDK Linux lane rather than cli-minimum-sdk.

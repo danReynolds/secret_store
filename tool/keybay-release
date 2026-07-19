@@ -11,7 +11,8 @@
 #
 # Then, from anywhere inside a keybay checkout:
 #
-#   keybay-release status | check | set <x.y.z> | bump <part> | publish <core|cli|both>
+#   keybay-release release <part|x.y.z>
+#   keybay-release status | check | set <x.y.z> | bump <part> | publish <core|cli>
 set -euo pipefail
 
 root="$(git rev-parse --show-toplevel 2>/dev/null || true)"

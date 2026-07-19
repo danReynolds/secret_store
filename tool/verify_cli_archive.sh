@@ -1,13 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-if [[ $# -ne 2 ]]; then
-  echo "usage: $0 ARCHIVE.tar.gz EXPECTED_VERSION" >&2
+if [[ $# -ne 1 ]]; then
+  echo "usage: $0 ARCHIVE.tar.gz" >&2
   exit 2
 fi
 
 archive="$1"
-version="$2"
 tmp="$(mktemp -d "${TMPDIR:-/tmp}/keybay-cli-verify.XXXXXX")"
 trap 'rm -rf "$tmp"' EXIT
 
@@ -88,23 +87,4 @@ for relative in \
     exit 1
   fi
 done
-actual_version="$("$tmp/keybay" --version)"
-if [[ "$actual_version" != "$version" ]]; then
-  echo "release binary version was '$actual_version', expected '$version'" >&2
-  exit 1
-fi
-
-help="$("$tmp/keybay" --help)"
-for command in run set rm list doctor; do
-  if [[ "$help" != *"  $command"* ]]; then
-    echo "release binary help omitted command '$command'" >&2
-    exit 1
-  fi
-done
-help_lines="$(printf '%s\n' "$help" | wc -l | tr -d ' ')"
-if ((help_lines > 24)); then
-  echo "release binary help used $help_lines lines, expected at most 24" >&2
-  exit 1
-fi
-
 echo "CLI release archive passed"

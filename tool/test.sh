@@ -17,6 +17,7 @@ dart analyze --fatal-infos
 echo "==> unit tier"
 (cd packages/keybay && dart test -x integration)
 (cd packages/keybay_cli && dart test -x integration)
+dart run tool/test_release.dart
 ./tool/test_cli.sh
 echo "==> native OS-keystore integration tier (real keychain/secret-service)"
 (cd packages/keybay && KEYBAY_INTEGRATION=1 dart test -t integration)

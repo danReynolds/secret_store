@@ -20,13 +20,18 @@ language-neutral quickstart keeps its terminal output redacted.
 
 ## Choose the executable first
 
-For an installed release, install the native executable and follow Dart's
+For a Dart-channel install, build the native executable and follow Dart's
 `PATH` notice if it prints one:
 
 ```sh
 dart install keybay_cli
 keybay --version
 ```
+
+On macOS, `dart install` does not provide the promoted release's frozen
+Developer ID identity, so Keychain access can fail closed after an update if
+that install's identity changes. Use the signed Homebrew channel when stable
+cross-release Keychain identity matters.
 
 For the current source checkout, do not install a stale snapshot. Resolve the
 workspace and define the source runner once from the repository root:
@@ -45,9 +50,10 @@ keybay --version
 
 `keybay-dev` runs the current source with the root package configuration while
 preserving the example directory as the manifest directory. On macOS, the
-shared Dart VM is the Keychain trust unit for this source mode; the signed
-installed binary has its own stable identity. The runner is contributor
-tooling, not a sixth CLI command and not part of a release archive.
+shared Dart VM is the Keychain trust unit for this source mode; only the
+promoted Developer ID-signed archive promises the frozen release identity. The
+runner is contributor tooling, not a sixth CLI command and not part of a
+release archive.
 
 Dart also supports global activation from the local package path:
 

@@ -1,281 +1,259 @@
-# Keybay CLI release runbook
+# Keybay release runbook
 
-This is the operational companion to
-[cli-implementation-plan.md](cli-implementation-plan.md) Phase 3. A release is
-not complete merely because a tag exists: every receipt below is part of the
-security and installation contract.
+Keybay releases are deliberately tag-triggered and one-way. A maintainer makes
+three decisions; GitHub Actions performs the rest:
 
-## Versioning and the release tool
+1. merge one reviewed, green release commit;
+2. sign and push the core tag, then wait for its green workflow and pub.dev;
+3. from the same commit, sign and push the CLI tag.
 
-The `keybay` core library and the `keybay_cli` executable version in **lockstep**.
-Four references must carry the same version — the core `pubspec.yaml`, the CLI
-`pubspec.yaml`, the CLI's exact `keybay:` dependency pin, and the `cliVersion`
-constant (what `keybay --version` prints). `tool/release.dart` keeps them
-synchronized. Install the launcher once, from any checkout:
+There is no merge bot, PAT for tag pushes, GitHub releases, or pub.dev,
+mutable artifact promotion, or combined "publish both" command. The sole
+non-Apple long-lived CI secret is the narrow cross-repository Homebrew tap
+token. An owner-created, signed tag is the human authorization boundary.
 
-```sh
-cp tool/keybay-release ~/.pub-cache/bin/keybay-release && chmod +x ~/.pub-cache/bin/keybay-release
-```
+## One-time repository setup
 
-**Everyday release — one command, then merge:**
+Keep each credential in the one job that needs it.
 
-```sh
-keybay-release release minor      # or: release patch / release 0.2.0
-```
+| GitHub environment | Allowed tags | Contents |
+|---|---|---|
+| `macos-signing` | `keybay_cli-v*` | `APPLE_CERTIFICATE_P12_BASE64`, `APPLE_CERTIFICATE_PASSWORD` |
+| `macos-notarization` | `keybay_cli-v*` | secret `APPLE_NOTARY_KEY_P8_BASE64`; variables `APPLE_NOTARY_KEY_ID`, `APPLE_NOTARY_ISSUER_ID` |
+| `homebrew-tap` | `keybay_cli-v*` | `HOMEBREW_TAP_TOKEN`, scoped to Contents write on `danReynolds/homebrew-tap` only |
+| `pub.dev` | `v*`, `keybay_cli-v*` | no publisher secret; pub.dev exchanges GitHub OIDC |
 
-That bumps all four references, adds `## 0.2.0` changelog stubs, commits, pushes
-a `release/v0.2.0` branch, and opens a PR to `main`. Fill in the changelog notes
-on the PR, then **merge it**. Merging lands the bump on `main`, where
-`release_on_merge.yml` creates the signed `v0.2.0` and `keybay_cli-v0.2.0` tags,
-which trigger `publish.yml` and `release_cli.yml`. Approve the gated `release`
-and `pub.dev` environments and the release publishes to pub.dev and Homebrew.
-Everything the tool touches is version metadata; the workflows do all building,
-signing, and publishing.
+The Apple Team ID (`5AHFA9FUZG`) and code identifier
+(`io.github.danreynolds.keybay.cli`) are reviewed workflow constants, not
+secrets. The signing job derives the only acceptable certificate fingerprint
+from the P12 after proving it is a Developer ID Application identity for that
+team.
 
-**Merge-trigger prerequisite — `RELEASE_TAG_TOKEN`.** GitHub deliberately
-prevents the default Actions token from triggering other workflows, so
-`release_on_merge.yml` creates the tags with a repository secret named
-`RELEASE_TAG_TOKEN`: a fine-grained PAT scoped to **Contents: read and write** on
-`danReynolds/keybay`, or a GitHub App installation token with the same scope (the
-App is the higher-security option — short-lived, no user tie). The tags are
-created through the API so GitHub web-flow signs them (the publish workflows
-require a verified tag). Without the token, the workflow fails loudly on the
-first bumped version rather than silently not releasing — and you can always fall
-back to tagging by hand with `keybay-release publish both`. Auto-release only
-does anything once the one-time first-publish bootstrap below is done and trusted
-publishing is enabled; before that, a brand-new version still routes to a manual
-publish.
+Release tags must be SSH-signed by the dedicated key with fingerprint
+`SHA256:4ozSnfVaMzZ/qrzo51I8FPKawmZSIojAB5Ll+qhguFM`. The local release tool
+checks the configured public key and verifies the new tag before pushing; both
+workflows independently verify the byte-exact GitHub tag payload and signature.
+A GitHub web-flow signature is not sufficient. Rotate this key only through a
+reviewed workflow-and-runbook change before using the replacement key.
 
-**Other commands:**
+Register that public key with GitHub as an SSH **signing** key, then configure
+the clean release checkout:
 
 ```sh
-keybay-release status     # every reference + changelog state
-keybay-release check      # assert all four agree (CI enforces this too)
-keybay-release publish core|cli|both   # tag HEAD directly, bypassing the PR flow
+git config gpg.format ssh
+git config user.signingKey /absolute/path/to/keybay-release-signing.pub
+install -m 0755 tool/keybay-release ~/.pub-cache/bin/keybay-release
+ssh-keygen -lf /absolute/path/to/keybay-release-signing.pub
 ```
 
-`publish` is the manual escape hatch and the first-publish bootstrap path: it
-signs a tag on HEAD and pushes it, refusing unless every reference agrees, the
-tree is clean, `HEAD` is on `origin/main`, the `CHANGELOG.md` carries the version,
-and the tag is unused (`--dry-run` previews, `--yes` skips the prompt). `both`
-tags core first because the CLI pins, and pub.dev requires, an already-published
-core version. Drift is also caught in CI by
-`test/version_consistency_test.dart`, so a forgotten `cliVersion` bump fails a
-pull request rather than a half-finished release.
+The final fingerprint must be the frozen value above. The launcher deliberately
+resolves `tool/release.dart` from the current checkout rather than installing a
+stale copy of the release logic.
 
-## One-time owner setup
+Use deployment tag restrictions on every environment. Do not add an approval
+click performed by the same maintainer: the locally signed tag already records
+that decision, and self-approval adds delay without independent review. Add an
+environment reviewer only when a genuinely independent second person will
+review releases.
 
-1. Protect `main` before adding release credentials:
+Also configure the repository once:
 
-   - require changes to arrive through a pull request;
-   - require the branch to be current and require every top-level job in the
-     ordinary `ci` workflow: both `analyze-and-test` matrix legs,
-     `cli-minimum-sdk`, `integration-macos`, `integration-linux`,
-     `supply-chain`, and `crypto-pin-canary`;
-   - require conversation resolution and signed commits; and
-   - disallow force pushes and branch deletion, including for administrators.
+- protect `main` with the existing CI and review rules;
+- require Actions to be pinned to full commit SHAs;
+- enable immutable releases;
+- add one no-bypass tag ruleset for `v*` and `keybay_cli-v*` that blocks tag
+  updates and deletion;
+- add a separate creation ruleset for the same patterns that permits only the
+  `danReynolds` GitHub account to create them;
+- keep direct repository write access owner-only. GitHub lets any writer create
+  a Release for an existing tag, and tag rulesets do not govern Release objects;
+  adding a writer therefore grants release authority. If direct collaborators
+  become necessary, move binary publication to a separate owner/bot-only
+  distribution repository;
+- configure pub.dev trusted publishing for package `keybay`, workflow
+  `publish.yml`, tags `v{{version}}`, environment `pub.dev`;
+- configure pub.dev trusted publishing for package `keybay_cli`, workflow
+  `release_cli.yml`, tags `keybay_cli-v{{version}}`, environment `pub.dev`;
+- retain linear history and no force-push/delete on the Homebrew tap.
 
-   This is a single-maintainer repository, so do not require an approving
-   review that its owner cannot provide on their own pull request. The two
-   deployment environments below remain separately approval-gated. In
-   **Settings → Actions → General**, also enable **Require actions to be
-   pinned to a full-length commit SHA**. The workflows already use full SHAs;
-   this setting prevents a future regression.
+The owner-only creation rule is not optional. GitHub executes a tag-push
+workflow from the tagged commit, so an ordinary writer must not be able to tag
+an off-main commit that replaces the checks before requesting an environment.
+The separate no-bypass ruleset keeps even the owner from moving or deleting a
+tag after creation. Repository administration remains the unavoidable GitHub
+root of trust; the frozen SSH signature adds local intent and an auditable key.
 
-2. Create the protected GitHub environment `release` and require approval for
-   it. Add these environment secrets:
+GitHub does not reveal stored secret values. During migration, re-enter each
+value into its narrower environment, merge the hardened workflows, verify the
+new names, and only then delete the old all-purpose `release` environment.
+Never delete the old environment first.
 
-   - `APPLE_CERTIFICATE_P12_BASE64`
-   - `APPLE_CERTIFICATE_PASSWORD`
-   - `APPLE_SIGNING_IDENTITY`
-   - `APPLE_TEAM_ID` — the frozen 10-character Team ID; keep this independent
-     of the certificate secret so the verifier rejects an accidental team swap
-   - `APPLE_NOTARY_KEY_P8_BASE64`
-   - `APPLE_NOTARY_KEY_ID`
-   - `APPLE_NOTARY_ISSUER_ID`
-   - `HOMEBREW_TAP_TOKEN` — a fine-grained token with Contents write access to
-     `danReynolds/homebrew-tap` only
+## Prepare and authorize a release
 
-3. Create the public `danReynolds/homebrew-tap` repository with a `main`
-   branch and a `Formula/` directory. The release workflow refuses to publish
-   before it can read this repository; after the GitHub release exists it
-   writes only `Formula/keybay.rb`. Treat the tap as a code-distribution trust
-   root: keep it formula-only apart from a short README, add no collaborators,
-   require linear history, and disallow force pushes and branch deletion. The
-   fine-grained `HOMEBREW_TAP_TOKEN` is its only automated writer and has no
-   access to the Keybay source repository. A pull-request-only rule is not used
-   on the tap because the approval-gated release job deliberately commits the
-   generated, hash-pinned formula directly; the fresh Homebrew acceptance job
-   then installs and exercises that public commit before pub.dev publication.
-4. Create the protected GitHub environment `pub.dev` and require approval.
-   Push the signed core tag first:
+The core and CLI versions move in lockstep. The core pubspec, CLI pubspec,
+CLI's exact core dependency, and `keybay --version` constant must agree.
 
-   ```sh
-   git tag -s v0.1.0 -m "keybay 0.1.0"
-   git push origin v0.1.0
-   ```
+```sh
+keybay-release release patch       # creates and pushes release/vX.Y.Z + PR
+```
 
-   The bootstrap guard in `publish.yml` validates the signed tag but
-   deliberately skips OIDC because pub.dev does not permit automated first
-   publication. After that workflow succeeds, check out the exact tag in a clean
-   checkout and publish the core manually — directly from its own directory (the
-   core is a plain workspace member, `packages/keybay`, so no staging is needed):
+Replace both changelog placeholders, wait for CI, review, and merge. Then use a
+clean checkout of the merged commit:
 
-   ```sh
-   git checkout --detach v0.1.0
-   ./tool/validate_publish.sh packages/keybay cryptography ffi
-   dart pub -C packages/keybay publish
-   ```
+```sh
+keybay-release publish core
+# Wait for publish.yml to pass and for the core version to be live on pub.dev.
+keybay-release publish cli
+```
 
-   Review the archive before confirming. Then enable GitHub trusted publishing
-   for `keybay` from `danReynolds/keybay`, workflow `publish.yml`, tag pattern
-   `v{{version}}`, requiring the `pub.dev` environment. Remove the two explicit
-   `v0.1.0` bootstrap conditions from `publish.yml`; later core releases use
-   OIDC exclusively. Do not publish `keybay_cli` yet: its first manual
-   publication occurs only after the signed native release in the section
-   below, because it exact-pins this now-hosted core version.
-5. Confirm Appendix B's naming and registry availability record before signing
-   the first release. The repository-hosted GitHub Pages site is
-   the documentation surface; do not add a custom domain, separate GitHub
-   organization, or placeholder packages on unused registries for v0.1.
+`publish core` fetches `origin/main` and refuses unless `HEAD` is its exact
+current tip. It creates signed annotated tag `vX.Y.Z`, then uses a leased
+atomic push to reject a `main` it already observes as advanced. The workflow
+independently rechecks the exact remote tip after the push.
+
+Do not merge another PR between pushing the core tag and the core workflow
+accepting it. If `main` advances first, the append-only tag is intentionally
+stranded; release a new patch version instead of moving or deleting the tag.
+
+`publish cli` fetches the remote core tag and refuses unless `HEAD` is exactly
+that tag's peeled commit and the commit remains on `origin/main`. It creates and
+pushes signed annotated tag `keybay_cli-vX.Y.Z`. Main may have advanced while
+pub.dev processed the core; the CLI must still use the exact reviewed core
+source commit.
+
+Useful read-only commands:
+
+```sh
+keybay-release status
+keybay-release check
+keybay-release publish core --dry-run
+keybay-release publish cli --dry-run
+```
+
+## What automation proves
+
+### Core tag
+
+`publish.yml` rejects a lightweight, unverified, wrong-version, or stale-main
+tag. A no-credential job runs formatting, analysis, tests, and pub archive
+validation. Only the small final job receives `id-token: write`, checks out the
+same commit afresh, and publishes `packages/keybay` through pub.dev OIDC.
+
+### CLI tag
+
+`release_cli.yml` performs this sequence:
+
+1. Validate both verified annotated tags, exact source/version agreement, main
+   ancestry, the exact successful core-publish run, the hosted core archive,
+   tests, and the CLI package archive. The prior core workflow validated its
+   own package archive.
+2. Build arm64/x64 Linux and macOS candidates with Dart `3.12.2`.
+3. Execute Linux candidates on credential-free runners.
+4. In one `macos-signing` job, import only the P12, sign both candidates, destroy
+   the temporary keychain and P12, then verify the frozen identity. This job has
+   no checkout, Dart SDK, publisher token, or notary key and never executes a
+   candidate.
+5. Execute the exact signed candidates and the real Keychain quickstart on
+   older/current arm64 and Intel macOS runners. These jobs have no release
+   secret.
+6. Package fresh copies of the accepted bytes on Linux. Packaging is structural
+   and never executes a candidate.
+7. In one `macos-notarization` job, compare the packaged bytes to the signer
+   hashes, submit both architectures in one ZIP, validate Apple's accepted log,
+   destroy the P8, and then verify both online tickets. This job has no P12,
+   checkout, Dart SDK, or publisher token and never executes a candidate.
+8. Attest the four final archives, create one draft with the complete payload,
+   then publish it once. Repository immutability locks the release, tag, and
+   assets and creates GitHub's separate release attestation.
+9. Re-download and verify the immutable Linux release, checksum, and build
+   provenance; execute it with no token or Dart. Only then update Homebrew.
+10. Install and exercise the public Homebrew formula. Publish `keybay_cli` to
+    pub.dev through OIDC last.
+
+Build and acceptance are separate only where the boundary buys something: a
+fresh candidate runner cannot inherit signing/notary/publishing credentials or
+build-workspace mutations. Signing, notarization, and publication are separate
+because no single job should hold two release authorities. The cost is several
+small jobs; no custom release service or broad release token is added. The
+narrow Homebrew token exists only because the tap is a different repository.
 
 ## macOS identity and notarization
 
-Every release binary is independently checked for:
+Signing answers "which Apple-registered developer produced these bytes?" and
+binds Keychain access to a stable code identity. Every release binary must have:
 
 - identifier `io.github.danreynolds.keybay.cli`;
-- Developer ID Application authority and a secure timestamp;
-- hardened-runtime flag;
-- no entitlements;
-- a designated requirement anchored to Apple, the frozen identifier, and the
-  signing team;
-- successful access to a store created by a separately compiled binary with
-  the same designated identity;
-- an accepted notarization with an empty notary issue list; and
-- successful `spctl --assess --type execute` verification.
+- Team ID `5AHFA9FUZG` and Developer ID Application authority;
+- secure timestamp and hardened runtime;
+- no entitlements; and
+- this exact generated designated requirement:
 
-Apple creates notarization tickets for standalone Mach-O binaries but does not
-support stapling tickets to them. The workflow therefore submits a ZIP,
-publishes Apple's online ticket for the binary, and distributes the unchanged
-signed/notarized binary in a tarball. It does not add a `.pkg`, disk image, or
-app bundle solely to gain stapling. The owner ratified this standalone contract
-on 2026-07-13; offline-first installer distribution is not a v1 requirement.
-
-## Cut a CLI release
-
-1. Confirm the candidate commit is on `main`, ordinary CI is green on macOS
-   and Linux, `packages/keybay_cli/pubspec.yaml` and `CHANGELOG.md` carry the
-   release version, and the CLI's exact `keybay` pin names an already-published
-   core version. The release tag must be signed by a key GitHub recognizes as
-   verified; the workflow rejects lightweight or unverified tags.
-2. From a clean checkout:
-
-   ```sh
-   ./tool/test.sh
-   ./tool/test_linux.sh
-   ./tool/validate_publish.sh packages/keybay cryptography ffi
-   ./tool/validate_publish.sh packages/keybay_cli ffi keybay
-   ```
-
-   The validator permits only pub's expected warnings for the normative exact
-   pins (`cryptography` and `ffi` in the core; `ffi` and `keybay` in the CLI).
-   For the core, it builds and validates the same clean-checkout staging form
-   used by automated publishing: an explicit package allowlist with no CLI
-   sources or repository-only workspace metadata. The CLI is validated from
-   its workspace directory, proving that both archives remain independently
-   publishable.
-   Validation errors, dirty package files, or any new warning fail the release.
-
-3. Tag the exact reviewed commit with the package-specific tag:
-
-   ```sh
-   git tag -s keybay_cli-v0.1.0 -m "keybay_cli 0.1.0"
-   git push origin keybay_cli-v0.1.0
-   ```
-
-4. The release workflow rejects a version mismatch or a tag not contained in
-   `origin/main`. It then builds native arm64/x64 artifacts on each OS, signs
-   and notarizes macOS, executes the real README quickstart, verifies archive
-   contents, publishes SHA-256 sums and GitHub provenance attestations, creates
-   the GitHub release, and updates the tap formula from the actual artifact
-   hashes. Fresh runners then install the published Homebrew formula and Linux
-   archive without setting up Dart, verify the Linux checksum and provenance,
-   and execute the packaged quickstart against real platform stores. Only those
-   jobs can unlock pub.dev. For v0.1.0, the explicit bootstrap guard validates
-   the CLI package but skips OIDC, ensuring the first manual publication cannot
-   precede the native release. A native-release or channel-acceptance failure
-   therefore cannot publish a partial CLI release.
-5. Inspect the workflow logs, the per-architecture Apple notary result and
-   issue-log artifacts, release attestations, checksums, and tap commit. A
-   skipped architecture or failed post-release formula update is an incomplete
-   release, not a warning.
-6. After every native v0.1.0 receipt passes, check out the exact signed tag in a
-   clean checkout and publish the CLI's first version manually:
-
-   ```sh
-   git checkout --detach keybay_cli-v0.1.0
-   ./tool/validate_publish.sh packages/keybay_cli ffi keybay
-   dart pub -C packages/keybay_cli publish
-   ```
-
-   Review the archive before confirming. Then enable GitHub trusted publishing
-   for `keybay_cli` from `danReynolds/keybay`, workflow `release_cli.yml`, tag
-   pattern `keybay_cli-v{{version}}`, requiring the `pub.dev` environment.
-   Remove the two explicit `keybay_cli-v0.1.0` bootstrap conditions from
-   `release_cli.yml`; later CLI releases publish through OIDC only. The first
-   release is not complete until this manual publication and the hosted-install
-   receipt below succeed.
-
-## Clean-machine acceptance
-
-The release workflow automatically exercises the published Homebrew and Linux
-archive channels on fresh runners without setting up Dart. Complete the same
-acceptance once in fresh macOS and Ubuntu user accounts with no Dart installation
-and no existing `keybay-cli` store; those physical receipts catch image-specific
-assumptions that hosted runners cannot.
-
-### Homebrew on macOS
-
-```sh
-brew install danreynolds/tap/keybay
-keybay --version
-keybay doctor
-cd "$(brew --prefix keybay)/share/keybay/example/quickstart"
-cp secrets.env.example .secrets.env
-keybay run -- ./app.sh
-keybay set acme-example/openai-api-key
-keybay run -- ./app.sh
-keybay rm acme-example/openai-api-key
+```text
+designated => identifier "io.github.danreynolds.keybay.cli" and anchor apple generic and certificate 1[field.1.2.840.113635.100.6.2.6] /* exists */ and certificate leaf[field.1.2.840.113635.100.6.1.13] /* exists */ and certificate leaf[subject.OU] = "5AHFA9FUZG"
 ```
 
-The first `run` must exit 78 and print the exact `set` remediation without
-launching the child. Input at `set` must be hidden. The second `run` must show
-the literal URL and report the secret as available without printing its value.
+Notarization is a separate Apple malware/policy scan and online ticket. Apple
+does not staple a ticket to a standalone Mach-O executable, so Keybay does not
+add an app bundle, disk image, or installer merely to gain stapling. The gate is
+Apple's log matching the submitted ZIP hash, `Accepted` status, no issues, both
+architectures, followed by
+`codesign -R='notarized' --check-notarization` after the P8 has been destroyed.
+`spctl --assess` is not treated as a reliable standalone-executable contract.
 
-### GitHub archive on Linux
+The frozen requirement is the continuity anchor. The workflow also exercises a
+real Keychain round trip with every signed candidate, but it does not claim that
+a same-run round trip independently proves cross-release upgrade continuity.
 
-Install the distro's `secret-tool` client (`libsecret-tools` on Debian/Ubuntu)
-and use an unlocked desktop Secret Service provider. Verify `SHA256SUMS` and
-the GitHub attestation, extract the matching Linux archive, place `keybay` on
-`PATH`, then run the same commands from the archive's `example/quickstart`
-directory. `doctor` must identify Secret Service as reachable and unlocked.
+## Failure policy
 
-### Dart-native channel
+- Before publication, rerun the same tag only for transient credentials,
+  settings, runner, or network failures that do not change source or workflow
+  bytes. A source/workflow fix requires a new patch version. If an upload
+  failure leaves a draft, confirm it was never published, delete that draft,
+  and rerun.
+- After a successful GitHub publication, rerun only failed downstream jobs for
+  transient Homebrew or pub.dev failures. If a lost response makes the publish
+  job rerun, it accepts the existing release only after proving it is immutable
+  and every asset byte exactly matches this workflow run; it never alters it.
+- Never move a release tag, replace an asset, use `--clobber`, or repair a public
+  release in place. If published bytes are wrong, cut a new patch version.
+- A skipped architecture, rejected Apple log, failed public-channel receipt, or
+  missing pub.dev publication is an incomplete release, not a warning.
 
-From a separate clean account with Dart 3.10 or newer:
+The entire `0.1.0` GitHub release predates immutable releases and cannot satisfy
+the verification contract below on any OS. In addition, its macOS archives have
+matching published SHA-256 values and Apple logs and passed the old macOS 15
+gate, but fail strict code-signature verification and launch on macOS 26. They
+are not a valid current-OS continuity anchor. Do not mutate that release;
+supersede it with a hardened patch release.
+
+## Consumer verification
+
+For tag `keybay_cli-vX.Y.Z` and a downloaded archive, use GitHub CLI 2.93.0
+or newer. Versions through 2.92.0 leaked tokens during these verification
+commands ([GHSA-8xvp-7hj6-mcj9](https://github.com/cli/cli/security/advisories/GHSA-8xvp-7hj6-mcj9)):
 
 ```sh
-dart install keybay_cli
-keybay --version
-keybay doctor
+gh_version="$(gh --version | awk 'NR == 1 { print $3 }')"
+if [[ "$(printf '%s\n' 2.93.0 "$gh_version" | sort -V | head -1)" != 2.93.0 ]]; then
+  echo "GitHub CLI 2.93.0 or newer is required" >&2
+  exit 1
+fi
+gh release verify keybay_cli-vX.Y.Z --repo danReynolds/keybay
+gh release verify-asset keybay_cli-vX.Y.Z keybay-X.Y.Z-linux-x64.tar.gz \
+  --repo danReynolds/keybay
+gh attestation verify keybay-X.Y.Z-linux-x64.tar.gz \
+  --repo danReynolds/keybay \
+  --signer-workflow danReynolds/keybay/.github/workflows/release_cli.yml \
+  --source-ref refs/tags/keybay_cli-vX.Y.Z \
+  --deny-self-hosted-runners
 ```
 
-Download the matching release's source archive and run the same quickstart
-from `packages/keybay_cli/example/quickstart`; confirm `doctor` reports the
-actual compiled/VM trust unit. This channel is accepted only after
-installation resolves solely from pub.dev; a workspace or path override is
-not evidence.
+Also check the matching line in `SHA256SUMS`. On macOS, extract the binary and
+run strict `codesign` verification plus the online notarization check. Homebrew
+uses the archive hashes pinned in its generated formula; pub.dev verifies its
+own package archive and OIDC publisher identity.
 
-Record the OS image, architecture, install command, elapsed onboarding time,
-and command receipts for each lane. Phase 3 closes only when both no-Dart lanes
-onboard in under five minutes and the Dart-native lane resolves cleanly.
+Hosted runners exercise the no-Dart Linux archive and Homebrew channels. For a
+milestone release, repeat the documented quickstart once on clean physical
+macOS and Linux accounts; record OS, architecture, installer, and result.

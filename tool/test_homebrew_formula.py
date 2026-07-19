@@ -26,6 +26,13 @@ def load_renderer():
 def main() -> int:
     renderer = load_renderer()
     version = "0.1.0"
+    for invalid in ("v0.1.0", "0.1", "0.1.0-beta", "0.1.0+build"):
+        try:
+            renderer.render(invalid, pathlib.Path("unused"))
+        except ValueError:
+            pass
+        else:
+            raise AssertionError(f"invalid release version was accepted: {invalid}")
     with tempfile.TemporaryDirectory(prefix="keybay-formula.") as tmp:
         directory = pathlib.Path(tmp)
         expected_hashes = []

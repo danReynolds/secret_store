@@ -12,14 +12,18 @@ trap 'rm -rf "$tmp"' EXIT
 
 cp -R "$repo/packages/keybay_cli" "$tmp/keybay_cli"
 rm -rf "$tmp/keybay_cli/.dart_tool"
+version="$(awk '$1 == "version:" { print $2 }' "$tmp/keybay_cli/pubspec.yaml")"
+[[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
 
 awk -v core="$repo/packages/keybay" '
-  $0 == "  keybay: 0.1.0" {
+  $0 ~ /^  keybay: [0-9]+\.[0-9]+\.[0-9]+$/ {
     print "  keybay:"
     print "    path: " core
+    replaced++
     next
   }
   { print }
+  END { if (replaced != 1) exit 1 }
 ' "$tmp/keybay_cli/pubspec.yaml" > "$tmp/pubspec.yaml"
 mv "$tmp/pubspec.yaml" "$tmp/keybay_cli/pubspec.yaml"
 
@@ -38,8 +42,8 @@ if [[ -z "$installed" ]]; then
 fi
 # The installed bundle is a native executable, not a launcher that finds Dart.
 actual_version="$(PATH=/usr/bin:/bin "$installed" --version)"
-if [[ "$actual_version" != "0.1.0" ]]; then
-  echo "installed keybay version was '$actual_version', expected '0.1.0'" >&2
+if [[ "$actual_version" != "$version" ]]; then
+  echo "installed keybay version was '$actual_version', expected '$version'" >&2
   exit 1
 fi
 help_lines="$("$installed" --help | wc -l | tr -d ' ')"

@@ -11,7 +11,10 @@ OS-backed storage policy for the current runtime. No Flutter dependency,
 account, Keybay server, resident process, or network path is required.
 
 > `0.1.0` is published on pub.dev. Add the SDK with `dart pub add keybay`; the
-> CLI ships through Homebrew and `dart install keybay_cli`.
+> CLI ships through Homebrew and `dart install keybay_cli`. The 0.1.0 GitHub
+> release predates immutable-release verification, and its macOS
+> native/Homebrew binary is not a current channel on macOS 26; see the [CLI
+> install warning](../packages/keybay_cli/README.md#install).
 
 <span id="cli-quickstart"></span>
 The CLI now has a dedicated [guide](../packages/keybay_cli/README.md).

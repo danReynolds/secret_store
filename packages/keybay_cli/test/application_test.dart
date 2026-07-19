@@ -34,7 +34,7 @@ void main() {
 
     stdout.clear();
     expect(await application.execute(const VersionCommand()), exitSuccess);
-    expect(stdout.toString(), '0.1.0\n');
+    expect(stdout.toString(), '$cliVersion\n');
   });
 
   group('run', () {
@@ -492,7 +492,7 @@ void main() {
         'keystore: reachable, unlocked\n'
         'detail:   container=present key=present via test\n'
         'runtime:  compiled executable (signature not inspected)\n'
-        'keybay:   0.1.0\n',
+        'keybay:   $cliVersion\n',
       );
     });
 

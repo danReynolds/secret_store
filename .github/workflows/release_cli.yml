@@ -2,10 +2,14 @@ name: release keybay CLI
 
 on:
   push:
-    tags: ['keybay_cli-v[0-9]+.[0-9]+.[0-9]+*']
+    tags: ['keybay_cli-v[0-9]+.[0-9]+.[0-9]+']
 
-permissions:
-  contents: read
+permissions: {}
+
+env:
+  RELEASE_DART_SDK: '3.12.2'
+  RELEASE_TAG_SIGNER: 'SHA256:4ozSnfVaMzZ/qrzo51I8FPKawmZSIojAB5Ll+qhguFM'
+  APPLE_TEAM_ID: '5AHFA9FUZG'
 
 concurrency:
   group: keybay-cli-release-${{ github.ref }}
@@ -14,23 +18,100 @@ concurrency:
 jobs:
   validate:
     runs-on: ubuntu-24.04
+    permissions:
+      actions: read
+      contents: read
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           fetch-depth: 0
+          persist-credentials: false
       - uses: dart-lang/setup-dart@65eb853c7ba17dde3be364c3d2858773e7144260 # v1.7.2
-      - name: verify tag, version, and main ancestry
+        with:
+          sdk: ${{ env.RELEASE_DART_SDK }}
+      - name: verify paired signed tags, reviewed commit, and hosted core
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          set -euo pipefail
+          verify_release_tag_signature() {
+            local label="$1" tag_json="$2"
+            local payload="$RUNNER_TEMP/$label.payload"
+            local signature="$RUNNER_TEMP/$label.signature"
+            local proof
+            jq -j .verification.payload <<<"$tag_json" > "$payload"
+            jq -j .verification.signature <<<"$tag_json" > "$signature"
+            proof="$(ssh-keygen -Y check-novalidate -n git \
+              -s "$signature" < "$payload" 2>&1)"
+            rm -f "$payload" "$signature"
+            test "$proof" = "Good \"git\" signature with ED25519 key $RELEASE_TAG_SIGNER"
+            printf '%s\n' "$proof"
+          }
+
+          [[ "$GITHUB_REF_NAME" =~ ^keybay_cli-v[0-9]+\.[0-9]+\.[0-9]+$ ]]
           version="${GITHUB_REF_NAME#keybay_cli-v}"
           package_version="$(awk '$1 == "version:" { print $2 }' packages/keybay_cli/pubspec.yaml)"
+          core_version="$(awk '$1 == "version:" { print $2 }' packages/keybay/pubspec.yaml)"
           test "$version" = "$package_version"
-          git fetch origin main
-          git merge-base --is-ancestor "$GITHUB_SHA" origin/main
-          tag_object="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$GITHUB_REF_NAME" --jq .object.sha)"
-          tag_verified="$(gh api "repos/$GITHUB_REPOSITORY/git/tags/$tag_object" --jq .verification.verified)"
-          test "$tag_verified" = "true"
+          test "$version" = "$core_version"
+
+          previous_versions="$(
+            git tag --list 'keybay_cli-v*' |
+              sed -n 's/^keybay_cli-v\([0-9]\+\.[0-9]\+\.[0-9]\+\)$/\1/p' |
+              grep -vxF "$version" || true
+          )"
+          if [[ -n "$previous_versions" ]]; then
+            previous_latest="$(printf '%s\n' "$previous_versions" | sort -V | tail -1)"
+            newest="$(printf '%s\n%s\n' "$previous_latest" "$version" | sort -V | tail -1)"
+            if [[ "$newest" != "$version" ]]; then
+              echo "refusing CLI version $version after release tag keybay_cli-v$previous_latest" >&2
+              exit 1
+            fi
+          fi
+
+          cli_ref="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$GITHUB_REF_NAME")"
+          test "$(jq -r .object.type <<<"$cli_ref")" = tag
+          cli_tag_object="$(jq -r .object.sha <<<"$cli_ref")"
+          cli_tag="$(gh api "repos/$GITHUB_REPOSITORY/git/tags/$cli_tag_object")"
+          test "$(jq -r .verification.verified <<<"$cli_tag")" = true
+          verify_release_tag_signature cli "$cli_tag"
+          test "$(jq -r .object.type <<<"$cli_tag")" = commit
+          cli_commit="$(jq -r .object.sha <<<"$cli_tag")"
+          test "$cli_commit" = "$GITHUB_SHA"
+          test "$(git rev-parse "$GITHUB_REF_NAME^{}")" = "$cli_commit"
+
+          core_tag="v$version"
+          core_ref="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$core_tag")"
+          test "$(jq -r .object.type <<<"$core_ref")" = tag
+          core_tag_object="$(jq -r .object.sha <<<"$core_ref")"
+          core_tag_json="$(gh api "repos/$GITHUB_REPOSITORY/git/tags/$core_tag_object")"
+          test "$(jq -r .verification.verified <<<"$core_tag_json")" = true
+          verify_release_tag_signature core "$core_tag_json"
+          test "$(jq -r .object.type <<<"$core_tag_json")" = commit
+          core_commit="$(jq -r .object.sha <<<"$core_tag_json")"
+          test "$cli_commit" = "$core_commit"
+
+          git fetch --no-tags origin main
+          git merge-base --is-ancestor "$cli_commit" origin/main
+          curl --fail --silent --show-error --output /dev/null \
+            "https://pub.dev/api/archives/keybay-$version.tar.gz"
+
+          core_runs="$(gh api --method GET \
+            "repos/$GITHUB_REPOSITORY/actions/workflows/publish.yml/runs" \
+            -f branch="$core_tag" -f event=push -f per_page=100)"
+          successful_core_runs="$(jq \
+            --arg branch "$core_tag" \
+            --arg sha "$core_commit" \
+            '[.workflow_runs[] | select(
+              .head_branch == $branch and
+              .head_sha == $sha and
+              .status == "completed" and
+              .conclusion == "success"
+            )] | length' <<<"$core_runs")"
+          if [[ "$successful_core_runs" != 1 ]]; then
+            echo "the exact $core_tag publish.yml run has not succeeded" >&2
+            exit 1
+          fi
       - run: dart pub get --enforce-lockfile
       - run: dart format --output=none --set-exit-if-changed .
       - run: dart analyze --fatal-infos
@@ -52,259 +133,617 @@ jobs:
           - runner: ubuntu-24.04-arm
             arch: arm64
     runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
       - uses: dart-lang/setup-dart@65eb853c7ba17dde3be364c3d2858773e7144260 # v1.7.2
-      - run: sudo apt-get update && sudo apt-get install -y libsecret-tools gnome-keyring dbus
+        with:
+          sdk: ${{ env.RELEASE_DART_SDK }}
       - run: dart pub get --enforce-lockfile
-      - name: compile and package
+      - name: compile without executing the candidate
         run: |
+          set -euo pipefail
+          mkdir -p build/release
+          binary="build/release/keybay-linux-${{ matrix.arch }}"
+          dart compile exe packages/keybay_cli/bin/keybay.dart -o "$binary"
+          chmod 0755 "$binary"
+          details="$(file "$binary")"
+          case "${{ matrix.arch }}" in
+            x64) [[ "$details" == *"x86-64"* || "$details" == *"x86_64"* ]] ;;
+            arm64) [[ "$details" == *"aarch64"* || "$details" == *"ARM aarch64"* ]] ;;
+          esac
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: linux-raw-${{ matrix.arch }}
+          path: build/release/keybay-linux-${{ matrix.arch }}
+          if-no-files-found: error
+          retention-days: 7
+
+  accept-linux-candidate:
+    needs: build-linux
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            arch: x64
+          - runner: ubuntu-24.04-arm
+            arch: arm64
+    runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: linux-raw-${{ matrix.arch }}
+          path: candidate
+      - run: sudo apt-get update && sudo apt-get install -y libsecret-tools gnome-keyring dbus
+      - name: exercise the frozen candidate without credentials
+        run: |
+          set -euo pipefail
           version="${GITHUB_REF_NAME#keybay_cli-v}"
-          mkdir -p build/cli artifacts
-          dart compile exe packages/keybay_cli/bin/keybay.dart -o build/cli/keybay
-          asset="artifacts/keybay-${version}-linux-${{ matrix.arch }}.tar.gz"
-          ./tool/package_cli_release.sh build/cli/keybay "$asset"
-          ./tool/verify_cli_archive.sh "$asset" "$version"
-          extracted="$RUNNER_TEMP/keybay-release-example-${{ matrix.arch }}"
-          mkdir -p "$extracted"
-          tar -xzf "$asset" -C "$extracted"
-          export KEYBAY_BINARY="$extracted/keybay"
-          export KEYBAY_QUICKSTART_DIR="$extracted/example/quickstart"
+          binary="$GITHUB_WORKSPACE/candidate/keybay-linux-${{ matrix.arch }}"
+          chmod 0755 "$binary"
+          ./tool/verify_cli_binary.sh "$binary" "$version"
+          export KEYBAY_BINARY="$binary"
+          export KEYBAY_QUICKSTART_DIR="$GITHUB_WORKSPACE/packages/keybay_cli/example/quickstart"
           export KEYBAY_QUICKSTART=1
           dbus-run-session -- bash -c '
-            eval "$(printf release-test | gnome-keyring-daemon --daemonize --unlock --components=secrets)"
+            eval "$(printf release-candidate | gnome-keyring-daemon --daemonize --unlock --components=secrets)"
             export GNOME_KEYRING_CONTROL
             export PATH=/usr/bin:/bin
             ./tool/test_cli_quickstart.sh
           '
+
+  build-macos-unsigned:
+    needs: validate
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-26
+            arch: arm64
+          - runner: macos-26-intel
+            arch: x64
+    runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+      - uses: dart-lang/setup-dart@65eb853c7ba17dde3be364c3d2858773e7144260 # v1.7.2
+        with:
+          sdk: ${{ env.RELEASE_DART_SDK }}
+      - run: dart pub get --enforce-lockfile
+      - name: compile the sole production binary
+        run: |
+          set -euo pipefail
+          mkdir -p build/release
+          binary="build/release/keybay-macos-${{ matrix.arch }}"
+          dart compile exe packages/keybay_cli/bin/keybay.dart -o "$binary"
+          chmod 0755 "$binary"
+          expected="${{ matrix.arch }}"
+          [[ "$expected" == x64 ]] && expected=x86_64
+          test "$(lipo -archs "$binary")" = "$expected"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: keybay-linux-${{ matrix.arch }}
-          path: artifacts/*.tar.gz
+          name: macos-unsigned-${{ matrix.arch }}
+          path: build/release/keybay-macos-${{ matrix.arch }}
           if-no-files-found: error
           retention-days: 7
 
-  build-macos:
-    needs: validate
-    environment: release
+  sign-macos:
+    needs: build-macos-unsigned
+    runs-on: macos-26
+    environment: macos-signing
+    permissions: {}
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: macos-unsigned-arm64
+          path: unsigned
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: macos-unsigned-x64
+          path: unsigned
+      - name: validate the exact signing inputs
+        run: |
+          set -euo pipefail
+          test "$(find unsigned -maxdepth 1 -type f | wc -l | tr -d ' ')" = 2
+          test -f unsigned/keybay-macos-arm64
+          test -f unsigned/keybay-macos-x64
+          chmod 0755 unsigned/keybay-macos-arm64 unsigned/keybay-macos-x64
+          test "$(lipo -archs unsigned/keybay-macos-arm64)" = arm64
+          test "$(lipo -archs unsigned/keybay-macos-x64)" = x86_64
+      - name: sign, destroy the keychain, then verify
+        env:
+          CERTIFICATE_P12_BASE64: ${{ secrets.APPLE_CERTIFICATE_P12_BASE64 }}
+          CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+        run: |
+          set -euo pipefail
+          umask 077
+          test -n "$CERTIFICATE_P12_BASE64"
+          test -n "$CERTIFICATE_PASSWORD"
+          p12="$RUNNER_TEMP/keybay-signing.p12"
+          keychain="$RUNNER_TEMP/keybay-signing.keychain-db"
+          password="$(openssl rand -hex 24)"
+          echo "::add-mask::$password"
+          best_effort_cleanup() {
+            security delete-keychain "$keychain" >/dev/null 2>&1 || true
+            rm -f "$p12"
+          }
+          trap best_effort_cleanup EXIT
+
+          printf '%s' "$CERTIFICATE_P12_BASE64" | base64 -D > "$p12"
+          security create-keychain -p "$password" "$keychain"
+          security set-keychain-settings -lut 300 "$keychain"
+          security unlock-keychain -p "$password" "$keychain"
+          security import "$p12" -k "$keychain" -P "$CERTIFICATE_PASSWORD" \
+            -T /usr/bin/codesign >/dev/null
+          unset CERTIFICATE_P12_BASE64 CERTIFICATE_PASSWORD
+          security set-key-partition-list -S apple-tool:,apple:,codesign: \
+            -s -k "$password" "$keychain" >/dev/null
+
+          identities="$(security find-identity -v -p codesigning "$keychain" | \
+            grep -E "^[[:space:]]*[0-9]+\) [0-9A-F]{40} \"Developer ID Application: .+ \($APPLE_TEAM_ID\)\"$" || true)"
+          test "$(printf '%s\n' "$identities" | sed '/^$/d' | wc -l | tr -d ' ')" = 1
+          identity="$(printf '%s\n' "$identities" | awk '{print $2}')"
+          [[ "$identity" =~ ^[0-9A-F]{40}$ ]]
+
+          mkdir -p signed
+          cp unsigned/keybay-macos-arm64 signed/keybay-macos-arm64
+          cp unsigned/keybay-macos-x64 signed/keybay-macos-x64
+          for binary in signed/keybay-macos-arm64 signed/keybay-macos-x64; do
+            codesign --force --keychain "$keychain" --sign "$identity" \
+              --identifier io.github.danreynolds.keybay.cli \
+              --options runtime --timestamp "$binary"
+          done
+
+          security lock-keychain "$keychain"
+          security delete-keychain "$keychain"
+          rm -f "$p12"
+          test ! -e "$keychain"
+          test ! -e "$p12"
+          trap - EXIT
+
+          expected_requirement="designated => identifier \"io.github.danreynolds.keybay.cli\" and anchor apple generic and certificate 1[field.1.2.840.113635.100.6.2.6] /* exists */ and certificate leaf[field.1.2.840.113635.100.6.1.13] /* exists */ and certificate leaf[subject.OU] = \"$APPLE_TEAM_ID\""
+          for binary in signed/keybay-macos-arm64 signed/keybay-macos-x64; do
+            codesign --verify --strict --verbose=2 "$binary"
+            details="$(codesign -dvvv "$binary" 2>&1)"
+            grep -Fx 'Identifier=io.github.danreynolds.keybay.cli' <<<"$details"
+            grep -Eq '^CodeDirectory .*flags=.*runtime' <<<"$details"
+            grep -q '^Authority=Developer ID Application:' <<<"$details"
+            grep -q '^Timestamp=' <<<"$details"
+            grep -Fx "TeamIdentifier=$APPLE_TEAM_ID" <<<"$details"
+            entitlements="$RUNNER_TEMP/$(basename "$binary").entitlements"
+            codesign -d --entitlements - "$binary" >"$entitlements" 2>/dev/null
+            test ! -s "$entitlements"
+            requirement="$(codesign -d -r- "$binary" 2>&1 | sed -n '/^designated =>/p')"
+            test "$requirement" = "$expected_requirement"
+          done
+          (cd signed && shasum -a 256 keybay-macos-arm64 keybay-macos-x64 > SHA256SUMS)
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: macos-signed
+          path: signed/*
+          if-no-files-found: error
+          retention-days: 7
+
+  accept-macos:
+    needs: sign-macos
     strategy:
       fail-fast: false
       matrix:
         include:
           - runner: macos-15
             arch: arm64
+            lane: older
+          - runner: macos-26
+            arch: arm64
+            lane: current
           - runner: macos-15-intel
             arch: x64
+            lane: older
+          - runner: macos-26-intel
+            arch: x64
+            lane: current
+    name: accept-macos (${{ matrix.arch }}, ${{ matrix.lane }})
     runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
-      - uses: dart-lang/setup-dart@65eb853c7ba17dde3be364c3d2858773e7144260 # v1.7.2
-      - run: dart pub get --enforce-lockfile
-      - name: compile release and continuity binaries
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: macos-signed
+          path: candidate
+      - name: verify identity and exercise the real login Keychain
         run: |
-          mkdir -p build/cli artifacts
-          dart compile exe packages/keybay_cli/bin/keybay.dart -o build/cli/keybay
-          dart compile exe packages/keybay_cli/tool/integration_harness.dart \
-            -o build/cli/keybay-continuity
-      - name: import Developer ID certificate
-        env:
-          CERTIFICATE_P12_BASE64: ${{ secrets.APPLE_CERTIFICATE_P12_BASE64 }}
-          CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-        run: |
-          umask 077
-          test -n "$CERTIFICATE_P12_BASE64"
-          test -n "$CERTIFICATE_PASSWORD"
-          keychain="$RUNNER_TEMP/keybay-signing.keychain-db"
-          password="$(openssl rand -hex 24)"
-          printf '%s' "$CERTIFICATE_P12_BASE64" | base64 -D > "$RUNNER_TEMP/keybay-signing.p12"
-          security create-keychain -p "$password" "$keychain"
-          security set-keychain-settings -lut 21600 "$keychain"
-          security unlock-keychain -p "$password" "$keychain"
-          security import "$RUNNER_TEMP/keybay-signing.p12" \
-            -k "$keychain" \
-            -P "$CERTIFICATE_PASSWORD" \
-            -T /usr/bin/codesign
-          security set-key-partition-list \
-            -S apple-tool:,apple:,codesign: \
-            -s \
-            -k "$password" \
-            "$keychain"
-          existing_keychains=()
-          while IFS= read -r existing; do
-            existing_keychains+=("${existing//\"/}")
-          done < <(security list-keychains -d user)
-          security list-keychains -d user -s "$keychain" "${existing_keychains[@]}"
-          {
-            echo "KEYBAY_SIGNING_KEYCHAIN=$keychain"
-            echo "KEYBAY_SIGNING_KEYCHAIN_PASSWORD=$password"
-          } >> "$GITHUB_ENV"
-      - name: Developer-ID sign and verify the frozen identity
-        env:
-          SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-        run: |
-          test -n "$SIGNING_IDENTITY"
-          test -n "$APPLE_TEAM_ID"
-          for binary in build/cli/keybay build/cli/keybay-continuity; do
-            codesign \
-              --force \
-              --keychain "$KEYBAY_SIGNING_KEYCHAIN" \
-              --sign "$SIGNING_IDENTITY" \
-              --identifier io.github.danreynolds.keybay.cli \
-              --options runtime \
-              --timestamp \
-              "$binary"
-            ./tool/verify_macos_release.sh "$binary" "$APPLE_TEAM_ID"
-          done
-      - name: prove signed-build Keychain access continuity
-        run: |
-          sentinel="release-continuity-${GITHUB_RUN_ID}-${{ matrix.arch }}"
-          # codesign (above) is done and explicitly targeted --keychain, so the
-          # temporary signing keychain is no longer needed. Drop it from the
-          # search list so this check runs against the LOGIN keychain — the
-          # real-world store the code-identity contract is actually about. With
-          # the temp keychain prepended, `keybay set` wrote the store key into
-          # it and the second binary's search skipped that keychain (its
-          # random password is unknown to the reader / it re-locks), so the key
-          # read back as absent (StoreKeyMissing). Both binaries now share the
-          # one unlocked login keychain.
-          login_keychain="$(security default-keychain -d user | sed -E 's/^[[:space:]]*"//; s/"[[:space:]]*$//')"
-          security list-keychains -d user -s "$login_keychain"
-          echo "continuity keychain search list:"; security list-keychains -d user
-          printf '%s' "$sentinel" | \
-            build/cli/keybay set --stdin release-check/token
-          listed="$(build/cli/keybay-continuity keybay-cli list)"
-          test "$listed" = "release-check/token"
-          resolved="$(build/cli/keybay-continuity keybay-cli run -f \
-            <(printf 'TOKEN=kb://release-check/token\n') -- /usr/bin/printenv TOKEN)"
-          test "$resolved" = "$sentinel"
-          build/cli/keybay rm release-check/token
-          rm -rf "$HOME/Library/Application Support/keybay-cli"
-          security delete-generic-password -s keybay-cli -a store-key >/dev/null
-      - name: notarize standalone binary and inspect the notary log
-        env:
-          NOTARY_KEY_P8_BASE64: ${{ secrets.APPLE_NOTARY_KEY_P8_BASE64 }}
-          NOTARY_KEY_ID: ${{ secrets.APPLE_NOTARY_KEY_ID }}
-          NOTARY_ISSUER_ID: ${{ secrets.APPLE_NOTARY_ISSUER_ID }}
-        run: |
-          umask 077
-          test -n "$NOTARY_KEY_P8_BASE64"
-          test -n "$NOTARY_KEY_ID"
-          test -n "$NOTARY_ISSUER_ID"
-          printf '%s' "$NOTARY_KEY_P8_BASE64" | base64 -D > "$RUNNER_TEMP/notary-key.p8"
-          ditto -c -k --keepParent build/cli/keybay "$RUNNER_TEMP/keybay-notary.zip"
-          xcrun notarytool submit "$RUNNER_TEMP/keybay-notary.zip" \
-            --key "$RUNNER_TEMP/notary-key.p8" \
-            --key-id "$NOTARY_KEY_ID" \
-            --issuer "$NOTARY_ISSUER_ID" \
-            --wait \
-            --timeout 30m \
-            --output-format json > "$RUNNER_TEMP/notary-result.json"
-          submission_id="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["id"])' "$RUNNER_TEMP/notary-result.json")"
-          submission_status="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["status"])' "$RUNNER_TEMP/notary-result.json")"
-          test "$submission_status" = "Accepted"
-          xcrun notarytool log "$submission_id" "$RUNNER_TEMP/notary-log.json" \
-            --key "$RUNNER_TEMP/notary-key.p8" \
-            --key-id "$NOTARY_KEY_ID" \
-            --issuer "$NOTARY_ISSUER_ID"
-          python3 -c 'import json,sys; data=json.load(open(sys.argv[1])); issues=data.get("issues", []); print(json.dumps(issues, indent=2)); raise SystemExit(bool(issues))' "$RUNNER_TEMP/notary-log.json"
-          # Notarization is proven by the Accepted submission status and the
-          # empty issue log above, plus the Developer-ID + hardened-runtime
-          # codesign checks in tool/verify_macos_release.sh (signing step).
-          # There is deliberately no spctl assessment here: Apple does not
-          # staple tickets to a bare Mach-O, and `spctl --assess --type execute`
-          # only assesses application *bundles* — it rejects any standalone
-          # binary as "the code is valid but does not seem to be an app",
-          # regardless of notarization. A CLI executable has no applicable
-          # Gatekeeper-bundle assessment.
+          set -euo pipefail
+          (cd candidate && shasum -a 256 -c SHA256SUMS)
           version="${GITHUB_REF_NAME#keybay_cli-v}"
-          cp "$RUNNER_TEMP/notary-result.json" \
-            "artifacts/keybay-${version}-macos-${{ matrix.arch }}.notary-result.json"
-          cp "$RUNNER_TEMP/notary-log.json" \
-            "artifacts/keybay-${version}-macos-${{ matrix.arch }}.notary-log.json"
-      - name: package signed and notarized binary
-        run: |
-          version="${GITHUB_REF_NAME#keybay_cli-v}"
-          asset="artifacts/keybay-${version}-macos-${{ matrix.arch }}.tar.gz"
-          ./tool/package_cli_release.sh build/cli/keybay "$asset"
-          ./tool/verify_cli_archive.sh "$asset" "$version"
-          extracted="$RUNNER_TEMP/keybay-release-example-${{ matrix.arch }}"
-          mkdir -p "$extracted"
-          tar -xzf "$asset" -C "$extracted"
-          KEYBAY_BINARY="$extracted/keybay" \
-          KEYBAY_QUICKSTART_DIR="$extracted/example/quickstart" \
+          binary="$GITHUB_WORKSPACE/candidate/keybay-macos-${{ matrix.arch }}"
+          chmod 0755 "$binary"
+          ./tool/verify_macos_release.sh "$binary" "$APPLE_TEAM_ID"
+          ./tool/verify_cli_binary.sh "$binary" "$version"
+          KEYBAY_BINARY="$binary" \
+          KEYBAY_QUICKSTART_DIR="$GITHUB_WORKSPACE/packages/keybay_cli/example/quickstart" \
           KEYBAY_QUICKSTART=1 \
           PATH=/usr/bin:/bin \
             ./tool/test_cli_quickstart.sh
+
+  assemble-release:
+    needs: [accept-linux-candidate, accept-macos]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: linux-raw-arm64
+          path: inputs/linux
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: linux-raw-x64
+          path: inputs/linux
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: macos-signed
+          path: inputs/macos
+      - name: package fresh copies without executing candidates
+        run: |
+          set -euo pipefail
+          test "$(find inputs -type f | wc -l | tr -d ' ')" = 5
+          test -f inputs/linux/keybay-linux-arm64
+          test -f inputs/linux/keybay-linux-x64
+          test -f inputs/macos/keybay-macos-arm64
+          test -f inputs/macos/keybay-macos-x64
+          test -f inputs/macos/SHA256SUMS
+          chmod 0755 inputs/linux/keybay-linux-* inputs/macos/keybay-macos-*
+          (cd inputs/macos && sha256sum -c SHA256SUMS)
+
+          version="${GITHUB_REF_NAME#keybay_cli-v}"
+          mkdir -p dist extracted
+          package_one() {
+            local os_name="$1" arch="$2" binary="$3"
+            local asset="dist/keybay-$version-$os_name-$arch.tar.gz"
+            ./tool/package_cli_release.sh "$binary" "$asset"
+            ./tool/verify_cli_archive.sh "$asset"
+            mkdir -p "extracted/$os_name-$arch"
+            tar -xzf "$asset" -C "extracted/$os_name-$arch"
+            cmp "$binary" "extracted/$os_name-$arch/keybay"
+          }
+          package_one linux arm64 inputs/linux/keybay-linux-arm64
+          package_one linux x64 inputs/linux/keybay-linux-x64
+          package_one macos arm64 inputs/macos/keybay-macos-arm64
+          package_one macos x64 inputs/macos/keybay-macos-x64
+
+          python3 tool/render_homebrew_formula.py "$version" dist dist/keybay.rb
+          ruby -c dist/keybay.rb
+          test "$(find dist -maxdepth 1 -type f | wc -l | tr -d ' ')" = 5
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: keybay-macos-${{ matrix.arch }}
-          path: artifacts/*
+          name: release-payload
+          path: dist/*
           if-no-files-found: error
           retention-days: 7
-      - name: clean signing material and disposable store
-        if: always()
-        run: |
-          rm -rf "$HOME/Library/Application Support/keybay-cli"
-          security delete-generic-password -s keybay-cli -a store-key >/dev/null 2>&1 || true
-          if [[ -n "${KEYBAY_SIGNING_KEYCHAIN:-}" ]]; then
-            security delete-keychain "$KEYBAY_SIGNING_KEYCHAIN" || true
-          fi
-          rm -f "$RUNNER_TEMP/keybay-signing.p12" "$RUNNER_TEMP/notary-key.p8"
 
-  publish-release:
-    needs: [build-linux, build-macos]
+  notarize-macos:
+    needs: assemble-release
+    runs-on: macos-26
+    environment: macos-notarization
+    permissions: {}
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: release-payload
+          path: payload
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: macos-signed
+          path: signed
+      - name: bind the notary input to the exact packaged bytes
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#keybay_cli-v}"
+          test "$(find payload -maxdepth 1 -type f | wc -l | tr -d ' ')" = 5
+          test "$(find signed -maxdepth 1 -type f | wc -l | tr -d ' ')" = 3
+          (cd signed && shasum -a 256 -c SHA256SUMS)
+          mkdir -p submission/arm64 submission/x64 notary
+          for arch in arm64 x64; do
+            tar -xOf "payload/keybay-$version-macos-$arch.tar.gz" keybay \
+              > "submission/$arch/keybay"
+            chmod 0755 "submission/$arch/keybay"
+            cmp "signed/keybay-macos-$arch" "submission/$arch/keybay"
+            codesign --verify --strict --verbose=2 "submission/$arch/keybay"
+          done
+          test "$(lipo -archs submission/arm64/keybay)" = arm64
+          test "$(lipo -archs submission/x64/keybay)" = x86_64
+          ditto -c -k --keepParent submission notary/keybay-notary.zip
+      - name: submit once and retain one verified Apple log
+        env:
+          NOTARY_KEY_P8_BASE64: ${{ secrets.APPLE_NOTARY_KEY_P8_BASE64 }}
+          NOTARY_KEY_ID: ${{ vars.APPLE_NOTARY_KEY_ID }}
+          NOTARY_ISSUER_ID: ${{ vars.APPLE_NOTARY_ISSUER_ID }}
+        run: |
+          set -euo pipefail
+          umask 077
+          test -n "$NOTARY_KEY_P8_BASE64"
+          [[ "$NOTARY_KEY_ID" =~ ^[A-Z0-9]{10}$ ]]
+          [[ "$NOTARY_ISSUER_ID" =~ ^[0-9a-fA-F-]{36}$ ]]
+          p8="$RUNNER_TEMP/keybay-notary-key.p8"
+          best_effort_cleanup() { rm -f "$p8"; }
+          trap best_effort_cleanup EXIT
+          printf '%s' "$NOTARY_KEY_P8_BASE64" | base64 -D > "$p8"
+          unset NOTARY_KEY_P8_BASE64
+
+          zip_hash="$(shasum -a 256 notary/keybay-notary.zip | awk '{print $1}')"
+          xcrun notarytool submit notary/keybay-notary.zip \
+            --key "$p8" --key-id "$NOTARY_KEY_ID" --issuer "$NOTARY_ISSUER_ID" \
+            --wait --timeout 30m --output-format json \
+            > "$RUNNER_TEMP/notary-result.json"
+          submission_id="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["id"])' "$RUNNER_TEMP/notary-result.json")"
+          test "$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["status"])' "$RUNNER_TEMP/notary-result.json")" = Accepted
+          xcrun notarytool log "$submission_id" notary/keybay-macos.notary-log.json \
+            --key "$p8" --key-id "$NOTARY_KEY_ID" --issuer "$NOTARY_ISSUER_ID"
+          python3 - notary/keybay-macos.notary-log.json "$zip_hash" <<'PY'
+          import json
+          import sys
+
+          with open(sys.argv[1], encoding="utf-8") as source:
+              data = json.load(source)
+          if data.get("status") != "Accepted":
+              raise SystemExit(f"notary status was {data.get('status')!r}")
+          if data.get("sha256") != sys.argv[2]:
+              raise SystemExit("Apple's notary log did not match the submitted ZIP")
+          if data.get("issues") not in (None, []):
+              raise SystemExit(f"notary issues: {data['issues']!r}")
+          arches = {ticket.get("arch") for ticket in data.get("ticketContents", [])}
+          if arches != {"arm64", "x86_64"}:
+              raise SystemExit(f"notary log covered unexpected architectures: {arches!r}")
+          print("Apple accepted both packaged macOS binaries")
+          PY
+          rm -f "$p8"
+          test ! -e "$p8"
+          trap - EXIT
+          rm -f notary/keybay-notary.zip "$RUNNER_TEMP/notary-result.json"
+      - name: verify both online notarization tickets without the P8 key
+        run: |
+          set -euo pipefail
+          codesign -vvvv -R='notarized' --check-notarization submission/arm64/keybay
+          codesign -vvvv -R='notarized' --check-notarization submission/x64/keybay
+          test "$(find notary -maxdepth 1 -type f | wc -l | tr -d ' ')" = 1
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: macos-notary-log
+          path: notary/keybay-macos.notary-log.json
+          if-no-files-found: error
+          retention-days: 7
+
+  publish-github:
+    needs: notarize-macos
     runs-on: ubuntu-24.04
-    environment: release
     permissions:
       contents: write
       id-token: write
       attestations: write
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
+          name: release-payload
           path: dist
-          pattern: keybay-*
-          merge-multiple: true
-      - name: verify Homebrew tap preconditions
-        env:
-          GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
-        run: |
-          test -n "$GH_TOKEN"
-          gh api repos/danReynolds/homebrew-tap --jq .full_name
-      - name: checksums and Homebrew formula
-        run: |
-          version="${GITHUB_REF_NAME#keybay_cli-v}"
-          find dist -maxdepth 1 -type f \
-            \( -name '*.tar.gz' -o -name '*.json' \) -print0 | \
-            sort -z | xargs -0 sha256sum | sed 's#  dist/#  #' > dist/SHA256SUMS
-          python3 tool/render_homebrew_formula.py "$version" dist dist/keybay.rb
-          ruby -c dist/keybay.rb
-      - uses: actions/attest-build-provenance@96278af6caaf10aea03fd8d33a09a777ca52d62f # v3.2.0
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
-          subject-path: dist/*
-      - name: create or repair GitHub release
+          name: macos-notary-log
+          path: dist
+      - name: freeze the exact release payload
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#keybay_cli-v}"
+          test "$(find dist -maxdepth 1 -type f | wc -l | tr -d ' ')" = 6
+          for name in \
+            "keybay-$version-linux-arm64.tar.gz" \
+            "keybay-$version-linux-x64.tar.gz" \
+            "keybay-$version-macos-arm64.tar.gz" \
+            "keybay-$version-macos-x64.tar.gz" \
+            keybay.rb \
+            keybay-macos.notary-log.json; do
+            test -f "dist/$name"
+          done
+          mv dist/keybay-macos.notary-log.json \
+            "dist/keybay-$version-macos.notary-log.json"
+          (
+            cd dist
+            sha256sum \
+              "keybay-$version-linux-arm64.tar.gz" \
+              "keybay-$version-linux-x64.tar.gz" \
+              "keybay-$version-macos-arm64.tar.gz" \
+              "keybay-$version-macos-x64.tar.gz" \
+              "keybay-$version-macos.notary-log.json" \
+              keybay.rb > SHA256SUMS
+          )
+          test "$(find dist -maxdepth 1 -type f | wc -l | tr -d ' ')" = 7
+      - name: attest final archives
+        uses: actions/attest@a1948c3f048ba23858d222213b7c278aabede763 # v4.1.1
+        with:
+          subject-path: dist/*.tar.gz
+      - name: publish or accept one exact immutable GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          version="${GITHUB_REF_NAME#keybay_cli-v}"
-          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
-            gh release upload "$GITHUB_REF_NAME" dist/* --clobber
-          else
-            gh release create "$GITHUB_REF_NAME" \
-              dist/* \
-              --verify-tag \
-              --generate-notes \
-              --title "Keybay CLI $version"
+          set -euo pipefail
+          gh_version="$(gh --version | awk 'NR == 1 { print $3 }')"
+          if [[ "$(printf '%s\n' 2.93.0 "$gh_version" | sort -V | head -1)" != 2.93.0 ]]; then
+            echo "GitHub CLI $gh_version is vulnerable to GHSA-8xvp-7hj6-mcj9; require 2.93.0+" >&2
+            exit 1
           fi
-      - name: publish formula to danReynolds/homebrew-tap
+          version="${GITHUB_REF_NAME#keybay_cli-v}"
+          assets=(
+            "keybay-$version-linux-arm64.tar.gz"
+            "keybay-$version-linux-x64.tar.gz"
+            "keybay-$version-macos-arm64.tar.gz"
+            "keybay-$version-macos-x64.tar.gz"
+            "keybay-$version-macos.notary-log.json"
+            keybay.rb
+            SHA256SUMS
+          )
+          if gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" \
+              >/dev/null 2>&1; then
+            if [[ "$(gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" \
+                --json isDraft --jq .isDraft)" = true ]]; then
+              echo "existing $GITHUB_REF_NAME is only a draft; inspect and delete it before rerunning" >&2
+              exit 1
+            fi
+            gh release verify "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY"
+            existing="$RUNNER_TEMP/existing-release"
+            mkdir "$existing"
+            gh release download "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" \
+              --dir "$existing"
+            test "$(find "$existing" -maxdepth 1 -type f | wc -l | tr -d ' ')" = 7
+            for name in "${assets[@]}"; do
+              test -f "$existing/$name"
+              cmp "dist/$name" "$existing/$name"
+            done
+            echo "existing immutable release exactly matches this run"
+            exit 0
+          fi
+
+          upload=()
+          for name in "${assets[@]}"; do
+            upload+=("dist/$name")
+          done
+          gh release create "$GITHUB_REF_NAME" "${upload[@]}" \
+            --verify-tag \
+            --generate-notes \
+            --title "Keybay CLI $version" \
+            --draft \
+            --repo "$GITHUB_REPOSITORY"
+          test "$(gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --json isDraft --jq .isDraft)" = true
+          test "$(gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets | length')" = 7
+          gh release edit "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" \
+            --draft=false
+          test "$(gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --json isDraft --jq .isDraft)" = false
+
+  accept-linux-release:
+    needs: publish-github
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      attestations: read
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+      - run: sudo apt-get update && sudo apt-get install -y libsecret-tools gnome-keyring dbus
+      - name: verify the immutable public artifact and its provenance
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh_version="$(gh --version | awk 'NR == 1 { print $3 }')"
+          if [[ "$(printf '%s\n' 2.93.0 "$gh_version" | sort -V | head -1)" != 2.93.0 ]]; then
+            echo "GitHub CLI $gh_version is vulnerable to GHSA-8xvp-7hj6-mcj9; require 2.93.0+" >&2
+            exit 1
+          fi
+          version="${GITHUB_REF_NAME#keybay_cli-v}"
+          asset="keybay-$version-linux-x64.tar.gz"
+          mkdir -p "$RUNNER_TEMP/keybay-release"
+          cd "$RUNNER_TEMP/keybay-release"
+          gh release verify "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY"
+          gh release download "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" \
+            --pattern "$asset" --pattern SHA256SUMS
+          gh release verify-asset "$GITHUB_REF_NAME" "$asset" \
+            --repo "$GITHUB_REPOSITORY"
+          checksum_line="$(awk -v name="$asset" '$2 == name { print }' SHA256SUMS)"
+          test "$(printf '%s\n' "$checksum_line" | wc -l | tr -d ' ')" = 1
+          printf '%s\n' "$checksum_line" | sha256sum -c -
+          gh attestation verify "$asset" \
+            --repo "$GITHUB_REPOSITORY" \
+            --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/release_cli.yml" \
+            --source-ref "$GITHUB_REF" \
+            --deny-self-hosted-runners
+      - name: exercise the downloaded channel without a token or Dart
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#keybay_cli-v}"
+          archive="$RUNNER_TEMP/keybay-release/keybay-$version-linux-x64.tar.gz"
+          ./tool/verify_cli_archive.sh "$archive"
+          mkdir "$RUNNER_TEMP/keybay-release/extracted"
+          tar -xzf "$archive" -C "$RUNNER_TEMP/keybay-release/extracted"
+          binary="$RUNNER_TEMP/keybay-release/extracted/keybay"
+          ./tool/verify_cli_binary.sh "$binary" "$version"
+          export KEYBAY_BINARY="$binary"
+          export KEYBAY_QUICKSTART_DIR="$RUNNER_TEMP/keybay-release/extracted/example/quickstart"
+          export KEYBAY_QUICKSTART=1
+          dbus-run-session -- bash -c '
+            eval "$(printf release-acceptance | gnome-keyring-daemon --daemonize --unlock --components=secrets)"
+            export GNOME_KEYRING_CONTROL
+            export PATH=/usr/bin:/bin
+            ./tool/test_cli_quickstart.sh
+          '
+
+  publish-homebrew:
+    needs: [publish-github, accept-linux-release]
+    runs-on: ubuntu-24.04
+    environment: homebrew-tap
+    permissions:
+      contents: read
+    steps:
+      - name: download the formula from the already-verified immutable release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p release
+          cd release
+          gh release download "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" \
+            --pattern keybay.rb --pattern SHA256SUMS
+          checksum_line="$(awk '$2 == "keybay.rb" { print }' SHA256SUMS)"
+          test "$(printf '%s\n' "$checksum_line" | wc -l | tr -d ' ')" = 1
+          printf '%s\n' "$checksum_line" | sha256sum -c -
+      - name: update only a newer Homebrew formula
         env:
           GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
         run: |
+          set -euo pipefail
+          test -n "$GH_TOKEN"
           version="${GITHUB_REF_NAME#keybay_cli-v}"
-          content="$(base64 -w0 dist/keybay.rb)"
-          sha="$(gh api repos/danReynolds/homebrew-tap/contents/Formula/keybay.rb --jq .sha 2>/dev/null || true)"
+          candidate=release/keybay.rb
+          current_json=""
+          current_sha=""
+          if current_json="$(gh api repos/danReynolds/homebrew-tap/contents/Formula/keybay.rb 2>/dev/null)"; then
+            current_sha="$(jq -r .sha <<<"$current_json")"
+            jq -r .content <<<"$current_json" | base64 --decode > "$RUNNER_TEMP/current-keybay.rb"
+            current_version="$(sed -n 's/^[[:space:]]*version "\([^"]*\)".*/\1/p' "$RUNNER_TEMP/current-keybay.rb")"
+            test -n "$current_version"
+            if [[ "$current_version" == "$version" ]]; then
+              if cmp -s "$candidate" "$RUNNER_TEMP/current-keybay.rb"; then
+                echo "Homebrew already carries keybay $version"
+                exit 0
+              fi
+              echo "refusing to replace keybay $version with different bytes" >&2
+              exit 1
+            fi
+            newest="$(printf '%s\n%s\n' "$current_version" "$version" | sort -V | tail -1)"
+            if [[ "$newest" != "$version" ]]; then
+              echo "refusing to downgrade Homebrew from $current_version to $version" >&2
+              exit 1
+            fi
+          fi
+
+          content="$(base64 -w0 "$candidate")"
           args=(
             --method PUT
             repos/danReynolds/homebrew-tap/contents/Formula/keybay.rb
@@ -312,81 +751,39 @@ jobs:
             -f "content=$content"
             -f "branch=main"
           )
-          if [[ -n "$sha" ]]; then
-            args+=(-f "sha=$sha")
+          if [[ -n "$current_sha" ]]; then
+            args+=(-f "sha=$current_sha")
           fi
-          gh api "${args[@]}"
+          gh api "${args[@]}" >/dev/null
 
   accept-homebrew:
-    needs: publish-release
-    runs-on: macos-15-intel
+    needs: publish-homebrew
+    runs-on: macos-26-intel
     permissions:
       contents: read
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
-      - name: install and exercise the published Homebrew channel without Dart
+        with:
+          persist-credentials: false
+      - name: install and exercise the public Homebrew channel
         run: |
+          set -euo pipefail
           version="${GITHUB_REF_NAME#keybay_cli-v}"
           brew tap danreynolds/tap
           brew install danreynolds/tap/keybay
           prefix="$(brew --prefix keybay)"
           binary="$prefix/bin/keybay"
-          test "$(PATH=/usr/bin:/bin "$binary" --version)" = "$version"
-          PATH=/usr/bin:/bin "$binary" doctor
+          ./tool/verify_cli_binary.sh "$binary" "$version"
+          ./tool/verify_macos_release.sh "$binary" "$APPLE_TEAM_ID"
+          codesign -vvvv -R='notarized' --check-notarization "$binary"
           KEYBAY_BINARY="$binary" \
           KEYBAY_QUICKSTART_DIR="$prefix/share/keybay/example/quickstart" \
           KEYBAY_QUICKSTART=1 \
           PATH=/usr/bin:/bin \
             ./tool/test_cli_quickstart.sh
 
-  accept-linux-archive:
-    needs: publish-release
-    runs-on: ubuntu-24.04
-    permissions:
-      contents: read
-      attestations: read
-    steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
-      - run: sudo apt-get update && sudo apt-get install -y libsecret-tools gnome-keyring dbus
-      - name: verify and exercise the published Linux channel without Dart
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          version="${GITHUB_REF_NAME#keybay_cli-v}"
-          asset="keybay-${version}-linux-x64.tar.gz"
-          release_dir="$RUNNER_TEMP/keybay-published-release"
-          mkdir -p "$release_dir"
-          cd "$release_dir"
-          gh release download "$GITHUB_REF_NAME" \
-            --repo "$GITHUB_REPOSITORY" \
-            --pattern "$asset" \
-            --pattern SHA256SUMS
-          checksum_line="$(awk -v name="$asset" '$2 == name { print }' SHA256SUMS)"
-          test "$(printf '%s\n' "$checksum_line" | wc -l)" -eq 1
-          printf '%s\n' "$checksum_line" | sha256sum -c -
-          gh attestation verify "$asset" \
-            --repo "$GITHUB_REPOSITORY" \
-            --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/release_cli.yml" \
-            --source-ref "$GITHUB_REF" \
-            --deny-self-hosted-runners
-          archive="$release_dir/$asset"
-          cd "$GITHUB_WORKSPACE"
-          ./tool/verify_cli_archive.sh "$archive" "$version"
-          mkdir "$release_dir/extracted"
-          tar -xzf "$archive" -C "$release_dir/extracted"
-          export KEYBAY_BINARY="$release_dir/extracted/keybay"
-          export KEYBAY_QUICKSTART_DIR="$release_dir/extracted/example/quickstart"
-          export KEYBAY_QUICKSTART=1
-          dbus-run-session -- bash -c '
-            eval "$(printf release-acceptance | gnome-keyring-daemon --daemonize --unlock --components=secrets)"
-            export GNOME_KEYRING_CONTROL
-            export PATH=/usr/bin:/bin
-            "$KEYBAY_BINARY" doctor
-            ./tool/test_cli_quickstart.sh
-          '
-
-  publish-pub:
-    needs: [accept-homebrew, accept-linux-archive]
+  publish-cli-pubdev:
+    needs: [accept-linux-release, accept-homebrew]
     runs-on: ubuntu-24.04
     environment: pub.dev
     permissions:
@@ -394,10 +791,13 @@ jobs:
       id-token: write
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
       - uses: dart-lang/setup-dart@65eb853c7ba17dde3be364c3d2858773e7144260 # v1.7.2
+        with:
+          sdk: ${{ env.RELEASE_DART_SDK }}
       - run: dart pub get --enforce-lockfile
         working-directory: packages/keybay_cli
-      - run: ./tool/validate_publish.sh packages/keybay_cli ffi keybay
       - name: publish to pub.dev through GitHub OIDC
         run: dart pub publish --force
         working-directory: packages/keybay_cli

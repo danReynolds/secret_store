@@ -17,7 +17,7 @@ if [[ "$details" != *$'\nIdentifier=io.github.danreynolds.keybay.cli\n'* ]]; the
   echo "release binary does not use identifier io.github.danreynolds.keybay.cli" >&2
   exit 1
 fi
-if [[ "$details" != *"runtime"* ]]; then
+if ! grep -Eq '^CodeDirectory .*flags=.*runtime' <<<"$details"; then
   echo "release binary does not enable the hardened runtime" >&2
   exit 1
 fi
@@ -58,17 +58,12 @@ if [[ "${KEYBAY_ALLOW_ADHOC:-}" != "1" ]]; then
     exit 1
   fi
 
-  requirement="$(codesign -d -r- "$binary" 2>&1)"
-  if [[ "$requirement" != *'identifier "io.github.danreynolds.keybay.cli"'* ]]; then
-    echo "designated requirement omitted the frozen identifier" >&2
-    exit 1
-  fi
-  if [[ "$requirement" != *"anchor apple generic"* ]]; then
-    echo "designated requirement is not anchored to Apple" >&2
-    exit 1
-  fi
-  if [[ "$requirement" != *"certificate leaf[subject.OU] = \"$team\""* ]]; then
-    echo "designated requirement omitted signing team $team" >&2
+  requirement="$(codesign -d -r- "$binary" 2>&1 | sed -n '/^designated =>/p')"
+  expected_requirement="designated => identifier \"io.github.danreynolds.keybay.cli\" and anchor apple generic and certificate 1[field.1.2.840.113635.100.6.2.6] /* exists */ and certificate leaf[field.1.2.840.113635.100.6.1.13] /* exists */ and certificate leaf[subject.OU] = \"$team\""
+  if [[ "$requirement" != "$expected_requirement" ]]; then
+    echo "release binary designated requirement changed" >&2
+    echo "actual:   $requirement" >&2
+    echo "expected: $expected_requirement" >&2
     exit 1
   fi
 fi

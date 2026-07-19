@@ -38,11 +38,22 @@ if [[ "$(uname -s)" == "Darwin" ]]; then
   codesign --force --sign - --identifier io.github.danreynolds.keybay.cli --options runtime \
     "$tmp/keybay-identity"
   KEYBAY_ALLOW_ADHOC=1 ./tool/verify_macos_release.sh "$tmp/keybay-identity"
+
+  mkdir "$tmp/runtime-in-path"
+  cp "$tmp/keybay" "$tmp/runtime-in-path/keybay"
+  codesign --force --sign - --identifier io.github.danreynolds.keybay.cli \
+    "$tmp/runtime-in-path/keybay"
+  if KEYBAY_ALLOW_ADHOC=1 \
+      ./tool/verify_macos_release.sh "$tmp/runtime-in-path/keybay"; then
+    echo "macOS identity verifier accepted a binary without hardened runtime" >&2
+    exit 1
+  fi
 fi
 version="$(awk '$1 == "version:" { print $2 }' packages/keybay_cli/pubspec.yaml)"
 archive="$tmp/keybay-$version-test.tar.gz"
 ./tool/package_cli_release.sh "$tmp/keybay" "$archive"
-./tool/verify_cli_archive.sh "$archive" "$version"
+./tool/verify_cli_archive.sh "$archive"
+./tool/verify_cli_binary.sh "$tmp/keybay" "$version"
 if [[ "${KEYBAY_SKIP_DART_INSTALL:-0}" != "1" ]]; then
   ./tool/test_cli_dart_install.sh
 fi

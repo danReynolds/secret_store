@@ -414,9 +414,11 @@ unit test are stated as such rather than converted into theater.
   typed rather than opening a prompt; stable identity prevents upgrades from
   losing access. `doctor` surfaces the VM-vs-compiled
   trust-unit state; pub-channel installs carry the documented caveat. Every
-  release uses §16's frozen identifier and Developer ID team, and release QA
-  verifies the designated requirement plus an upgrade that reads the existing
-  keychain item without an authorization failure.
+  release uses §16's frozen identifier and Developer ID team. Release QA
+  verifies the exact generated designated requirement and executes a real
+  Keychain round trip with each signed candidate across older/current macOS
+  runners. The frozen requirement is the continuity anchor; a same-run round
+  trip is not described as an independent cross-release upgrade proof.
 - **SR-12 — prompts require a TTY.** Interactive value entry refuses
   redirected stdin (use `--stdin`); no prompt can hang a script.
 - **SR-13 — no shell interpretation.** The child command is an argv vector
@@ -513,8 +515,10 @@ malware, root, and the child's own conduct remain out of scope at every tier.
    signed with a secure timestamp and hardened runtime, and notarized as
    standalone Mach-O binaries (SR-11). Apple publishes an online ticket but
    cannot staple it to a raw executable; Keybay does not add an installer or
-   app bundle solely to gain stapling. SHA-256 sums + build provenance
-   attestation accompany every artifact.
+   app bundle solely to gain stapling. SHA-256 sums accompany the complete
+   payload; GitHub build provenance covers each final executable archive, and
+   the immutable release carries a separate release attestation covering the
+   tag, commit, and published assets.
    Honest note: Dart AOT builds are not bit-reproducible; provenance is the
    compensating control.
 2. **Homebrew tap** (`brew install danreynolds/tap/keybay`), day one;
@@ -536,12 +540,20 @@ malware, root, and the child's own conduct remain out of scope at every tier.
    placeholder package on an unused registry is part of v0.1. Add another
    identity only when a real distribution artifact needs one.
 
-Release train: the CLI pins the exact core version; a core release triggers a
-reviewed CLI pin-bump release. Independent CHANGELOGs; per-package tags. Pub.dev
-requires each package's first version to be published manually. The one-time
-v0.1.0 bootstrap is still signed-tag-bound and archive-validated; the core is
-published first, and the CLI is published manually only after every native
-release gate succeeds. Trusted OIDC publishing is mandatory thereafter.
+Release train: both packages version in lockstep in one reviewed commit, and the
+CLI exact-pins that core version. Independent CHANGELOGs and per-package signed
+tags remain. The maintainer deliberately publishes the core tag first, waits
+for the exact core-tag workflow to succeed and for that archive to be live on
+pub.dev, then publishes the CLI tag from the same commit. Both packages use
+trusted OIDC publishing; no PAT is used for tag pushes, GitHub releases, or
+pub.dev, and no merge-triggered tag bot exists. The sole non-Apple long-lived
+CI credential is a repository-scoped Contents-write token for the separate
+Homebrew tap. Because GitHub loads tag-triggered workflow code from the tagged
+commit, an external ruleset permits only the repository owner's account to
+create release tags; a separate no-bypass rule makes those tags append-only.
+Direct write access remains owner-only because GitHub writers can create a
+Release for an existing tag; adding a writer would grant release authority and
+would require a separate restricted distribution repository.
 
 ## 12. Testing
 
@@ -611,17 +623,18 @@ Linux release hardware against the DX-2 budgets.
 *Acceptance:* `run` fails → lists missing keys → user runs `set` for each →
 `run` succeeds. No separate onboarding workflow exists.
 
-**Phase 3 — release.** Use the frozen macOS signing identifier and entitlement
-set; compile, Developer-ID sign with a secure timestamp and hardened runtime,
-notarize standalone macOS binaries, require an accepted online ticket and
-empty issue log, and verify with Gatekeeper; verify the designated requirement,
-exact entitlement set, and successful signed-binary upgrade access to an
-existing keychain item;
-build Linux artifacts; publish checksums + provenance; gate pub.dev on fresh
-hosted runners installing the published Homebrew and Linux archive channels
-without Dart; validate Homebrew, the GitHub archive, and `dart install` from
-physical clean machines; execute the documented quickstart verbatim
-on macOS and Linux; complete Appendix B's registration checklist.
+**Phase 3 — release.** Use the frozen macOS signing identifier, Team ID, and
+empty entitlement set; compile, Developer-ID sign with a secure timestamp and
+hardened runtime; require the exact designated requirement; execute signed
+candidates and a real Keychain round trip on older/current arm64 and Intel
+macOS runners; notarize both standalone Mach-O binaries in one submission;
+validate Apple's accepted log, submitted ZIP hash, empty issue list, both
+architectures, and both online tickets; build and accept Linux artifacts;
+publish checksums, archive provenance, and one immutable release; gate pub.dev
+on fresh hosted runners verifying and executing the public Linux and Homebrew
+channels without Dart; validate the three channels from physical clean machines
+for milestone releases; execute the documented quickstart verbatim on macOS and
+Linux; complete Appendix B's registration checklist.
 *Acceptance:* a person with no Dart toolchain installs and onboards a repo
 in under five minutes on macOS and Linux.
 
@@ -749,8 +762,10 @@ does not materially improve the supported security model.
 2. **Standalone macOS notarization.** Apple accepts standalone Mach-O binaries
    for notarization but does not support stapling a ticket to the raw binary.
    The release path signs the standalone binary, submits it in a ZIP, requires
-   an accepted ticket with no issues, and verifies it with `spctl`; it does not
-   add an app bundle, disk image, or installer solely to gain stapling.
+   an accepted log matching the submitted ZIP with no issues and both
+   architectures, then verifies the online tickets with
+   `codesign -R='notarized' --check-notarization`; it does not add an app bundle,
+   disk image, or installer solely to gain stapling.
 
 The key grammar, workspace layout, PATH behavior, doctor health exit, CLI SDK
 floor, and macOS signing identifier remain frozen below or in their normative

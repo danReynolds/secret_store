@@ -1,58 +1,105 @@
-name: publish
+name: publish keybay core
 
-# Publishes to pub.dev via trusted publishing (OIDC — no long-lived token is
-# stored in the repo) when a v-prefixed version tag is pushed. The tag must
-# match the `version:` in packages/keybay/pubspec.yaml. The core package
-# publishes directly from packages/keybay (no staging — it is a plain workspace
-# member, not the workspace root).
-#
-# 0.1.0 was published manually to bootstrap the package name (pub.dev cannot
-# automate a first publication) and trusted publishing is now enabled, so every
-# tag publishes through OIDC.
 on:
   push:
-    tags: ['v[0-9]+.[0-9]+.[0-9]+*']
+    tags: ['v[0-9]+.[0-9]+.[0-9]+']
 
-# Least privilege: the default token stays read-only; only the publish job
-# opts into the OIDC id-token it needs.
-permissions:
-  contents: read
+permissions: {}
+
+env:
+  RELEASE_TAG_SIGNER: 'SHA256:4ozSnfVaMzZ/qrzo51I8FPKawmZSIojAB5Ll+qhguFM'
+
+concurrency:
+  group: keybay-core-publish-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
-  publish:
+  validate:
     runs-on: ubuntu-24.04
-    environment: pub.dev
     permissions:
       contents: read
-      id-token: write # mint the OIDC token pub.dev verifies
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           fetch-depth: 0
+          persist-credentials: false
       - uses: dart-lang/setup-dart@65eb853c7ba17dde3be364c3d2858773e7144260 # v1.7.2
-      - name: verify signed tag, version, and main ancestry
+        with:
+          sdk: 3.12.2
+      - name: verify the signed core tag and reviewed commit
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          set -euo pipefail
+          verify_release_tag_signature() {
+            local label="$1" tag_json="$2"
+            local payload="$RUNNER_TEMP/$label.payload"
+            local signature="$RUNNER_TEMP/$label.signature"
+            local proof
+            jq -j .verification.payload <<<"$tag_json" > "$payload"
+            jq -j .verification.signature <<<"$tag_json" > "$signature"
+            proof="$(ssh-keygen -Y check-novalidate -n git \
+              -s "$signature" < "$payload" 2>&1)"
+            rm -f "$payload" "$signature"
+            test "$proof" = "Good \"git\" signature with ED25519 key $RELEASE_TAG_SIGNER"
+            printf '%s\n' "$proof"
+          }
+
+          [[ "$GITHUB_REF_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
           version="${GITHUB_REF_NAME#v}"
           package_version="$(awk '$1 == "version:" { print $2 }' packages/keybay/pubspec.yaml)"
           test "$version" = "$package_version"
-          git fetch origin main
-          git merge-base --is-ancestor "$GITHUB_SHA" origin/main
-          tag_object="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$GITHUB_REF_NAME" --jq .object.sha)"
-          tag_verified="$(gh api "repos/$GITHUB_REPOSITORY/git/tags/$tag_object" --jq .verification.verified)"
-          test "$tag_verified" = "true"
+
+          previous_versions="$(
+            git tag --list 'v*' |
+              sed -n 's/^v\([0-9]\+\.[0-9]\+\.[0-9]\+\)$/\1/p' |
+              grep -vxF "$version" || true
+          )"
+          if [[ -n "$previous_versions" ]]; then
+            previous_latest="$(printf '%s\n' "$previous_versions" | sort -V | tail -1)"
+            newest="$(printf '%s\n%s\n' "$previous_latest" "$version" | sort -V | tail -1)"
+            if [[ "$newest" != "$version" ]]; then
+              echo "refusing core version $version after release tag v$previous_latest" >&2
+              exit 1
+            fi
+          fi
+
+          ref_json="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$GITHUB_REF_NAME")"
+          test "$(jq -r .object.type <<<"$ref_json")" = tag
+          tag_object="$(jq -r .object.sha <<<"$ref_json")"
+          tag_json="$(gh api "repos/$GITHUB_REPOSITORY/git/tags/$tag_object")"
+          test "$(jq -r .verification.verified <<<"$tag_json")" = true
+          verify_release_tag_signature core "$tag_json"
+          test "$(jq -r .object.type <<<"$tag_json")" = commit
+          tag_commit="$(jq -r .object.sha <<<"$tag_json")"
+          test "$tag_commit" = "$GITHUB_SHA"
+          test "$(git rev-parse "$GITHUB_REF_NAME^{}")" = "$tag_commit"
+
+          git fetch --no-tags origin main
+          test "$tag_commit" = "$(git rev-parse origin/main)"
       - run: dart pub get --enforce-lockfile
-      # Prove the tagged ref itself. The ancestry check above passes the
-      # moment a commit lands on main — even before that commit's own CI has
-      # finished — and branch protection is a repo setting this workflow
-      # cannot see. So the unit tier (dependency-closure snapshot, crypto
-      # vector firewall, container fuzz) re-runs here against the exact bytes
-      # being published, mirroring release_cli.yml's validate job.
       - run: dart format --output=none --set-exit-if-changed .
       - run: dart analyze --fatal-infos
       - run: dart test -x integration
         working-directory: packages/keybay
       - run: ./tool/validate_publish.sh packages/keybay cryptography ffi
+
+  publish:
+    needs: validate
+    runs-on: ubuntu-24.04
+    environment: pub.dev
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+      - uses: dart-lang/setup-dart@65eb853c7ba17dde3be364c3d2858773e7144260 # v1.7.2
+        with:
+          sdk: 3.12.2
+      - run: dart pub get --enforce-lockfile
+        working-directory: packages/keybay
       - name: publish to pub.dev through GitHub OIDC
-        run: dart pub -C packages/keybay publish --force
+        run: dart pub publish --force
+        working-directory: packages/keybay

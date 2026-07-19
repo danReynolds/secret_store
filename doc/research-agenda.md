@@ -249,15 +249,23 @@ diverge — restored backup looks like tamper).
 
 ## 10. Supply chain & CI posture
 
-- **Pin GitHub Actions by commit SHA** (currently `@v4`/`@v1` tags,
-  ci.yml:15-49) — tag-retarget is a live attack class. Also evaluate OpenSSF
-  Scorecard, StepSecurity harden-runner, and dependabot/renovate config.
+- **Resolved 2026-07-18: release action integrity.** Actions are pinned to full
+  commit SHAs and the repository enforces that policy. Immutable releases,
+  owner-only creation and no-bypass append-only release tags, split credential
+  environments, archive build provenance, and release attestations are now
+  part of the release contract. The CLI release also requires the exact core
+  tag's publish workflow to have succeeded, not only a matching pub.dev URL.
+  Direct write access is intentionally owner-only because GitHub writers can
+  create Release objects even when tag creation itself is restricted.
+  Revisit Scorecard, harden-runner, or an update bot only if each control buys a
+  concrete property without becoming a second release system.
 - **OSV coverage of pub.dev** — confirm the scanner actually resolves Dart
   advisories from `pubspec.lock` (the ecosystem's advisory density is low; what
   else covers Dart?).
-- **Publication hardening for the pub.dev release** (pre-1.0 follow-up):
-  trusted publishing / automated publishing from CI with OIDC, provenance,
-  2FA on the publisher, `pana` checks.
+- **Resolved 2026-07-18: pub.dev trusted publishing.** Both packages publish
+  from signed-tag workflows through OIDC after archive validation; no publisher
+  token is stored. Confirm publisher-account 2FA out of band and periodically
+  re-check pub.dev's trusted-publisher configuration.
 - **Exact-pin consequences post-publish.** `cryptography: 2.9.0` exact-pinned in
   a *published library* forces the resolution for every consumer (conflict
   risk) — research the ecosystem norm (range + lockfile + advisory process) and

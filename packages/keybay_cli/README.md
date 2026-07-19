@@ -27,6 +27,11 @@ invokes a shell or stays resident as a wrapper.
 The signed Homebrew binary is the promoted release channel because its stable
 macOS code identity is part of the login-Keychain access contract:
 
+> The entire 0.1.0 GitHub release predates immutable-release verification. Its
+> macOS binary also fails strict code-signature verification and launch on
+> macOS 26. Do not treat any 0.1.0 GitHub asset as satisfying the verification
+> contract below, and do not use its macOS binary; wait for the patch release.
+
 ```sh
 brew install danreynolds/tap/keybay
 ```
@@ -41,6 +46,12 @@ The Dart channel builds and installs a native `keybay` executable. Dart is
 needed to install or update it, not to launch it afterward. Follow Dart's
 notice if its install-bin directory is not already on `PATH`.
 
+On macOS, this pub.dev channel does not promise the frozen Developer ID
+identity used by the promoted Homebrew archive. Its ad-hoc/shared-runtime
+identity can change across installs, so existing login-Keychain items can fail
+closed after an update. Use the signed Homebrew channel when cross-release
+Keychain continuity matters.
+
 Contributors can run the in-tree package directly from a source checkout
 instead:
 
@@ -54,27 +65,48 @@ runner documented in the [examples guide](example/README.md).
 
 ### Verify a release download
 
-Release integrity is machine-checkable end to end: every GitHub release ships
-a `SHA256SUMS` file and a GitHub provenance attestation per artifact, and the
-macOS binaries are Developer ID-signed, hardened-runtime, and notarized. When
-you download an archive (`keybay-<version>-<os>-<arch>.tar.gz`) from a GitHub
-release, verify it before extracting — a link someone hands you is not a
-provenance chain:
+Release integrity is machine-checkable end to end. Every GitHub release ships
+`SHA256SUMS`; each executable archive has GitHub build provenance; and the
+immutable release has a separate attestation covering its tag, commit, and
+assets. macOS binaries are Developer ID-signed, hardened-runtime, and
+notarized. Verify a downloaded archive before extracting it — a link someone
+hands you is not a provenance chain. Use GitHub CLI 2.93.0 or newer; older
+versions are affected by
+[GHSA-8xvp-7hj6-mcj9](https://github.com/cli/cli/security/advisories/GHSA-8xvp-7hj6-mcj9):
 
 ```sh
-# 1. The archive must match the release's published checksums.
+VERSION=X.Y.Z
+OS=linux
+ARCH=x64
+GH_VERSION="$(gh --version | awk 'NR == 1 { print $3 }')"
+if [[ "$(printf '%s\n' 2.93.0 "$GH_VERSION" | sort -V | head -1)" != 2.93.0 ]]; then
+  echo "GitHub CLI 2.93.0 or newer is required" >&2
+  exit 1
+fi
+
+# 1. The release must be immutable and the local file must be one of its assets.
+gh release verify "keybay_cli-v$VERSION" --repo danReynolds/keybay
+gh release verify-asset "keybay_cli-v$VERSION" \
+  "keybay-$VERSION-$OS-$ARCH.tar.gz" --repo danReynolds/keybay
+
+# 2. The archive must match the release's published checksums.
 #    (macOS: `shasum -a 256 --check --ignore-missing SHA256SUMS`)
 sha256sum --check --ignore-missing SHA256SUMS
 
-# 2. The artifact must prove it was built by this repository's release
+# 3. The archive must prove it was built by this repository's release
 #    workflow from the tag you expect (uses the GitHub CLI).
-gh attestation verify keybay-0.1.0-linux-x64.tar.gz --repo danReynolds/keybay
+gh attestation verify "keybay-$VERSION-$OS-$ARCH.tar.gz" \
+  --repo danReynolds/keybay \
+  --signer-workflow danReynolds/keybay/.github/workflows/release_cli.yml \
+  --source-ref "refs/tags/keybay_cli-v$VERSION" \
+  --deny-self-hosted-runners
 ```
 
-The other channels carry their own verification: Homebrew checks every
-artifact against the SHA-256 pinned in the formula, `dart install keybay_cli`
-resolves through pub.dev's content-hash verification, and macOS Gatekeeper
-validates the binary's Developer ID signature and notarization.
+The other channels carry their own verification: Homebrew checks archives
+against SHA-256 values pinned in the formula, `dart install keybay_cli` resolves
+through pub.dev's content-hash verification, and the release pipeline verifies
+the macOS binary's exact Developer ID requirement and online notarization
+ticket.
 
 On Linux, Keybay requires the `secret-tool` client and an unlocked desktop
 Secret Service provider. Homebrew installs its `libsecret` dependency; distro
@@ -87,8 +119,8 @@ trust unit. `keybay doctor` makes the runtime distinction visible.
 
 ## Quickstart
 
-The source checkout includes a language-neutral executable example; future
-native release archives will include it too. Use
+The source checkout and native release archives include the same
+language-neutral executable example. Use
 `packages/keybay_cli/example/quickstart` in a source checkout or
 `example/quickstart` in an extracted native archive. The
 [repository examples guide](https://github.com/danReynolds/keybay/tree/main/packages/keybay_cli/example)

@@ -15,7 +15,7 @@ PLATFORMS = (
     ("linux", "arm64"),
     ("linux", "x64"),
 )
-VERSION = re.compile(r"^[0-9]+\.[0-9]+\.[0-9]+(?:[-+][0-9A-Za-z.-]+)?$")
+VERSION = re.compile(r"^[0-9]+\.[0-9]+\.[0-9]+$")
 
 
 def sha256(path: pathlib.Path) -> str:
