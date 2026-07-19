@@ -70,10 +70,13 @@ Also configure the repository once:
   adding a writer therefore grants release authority. If direct collaborators
   become necessary, move binary publication to a separate owner/bot-only
   distribution repository;
-- configure pub.dev trusted publishing for package `keybay`, workflow
-  `publish.yml`, tags `v{{version}}`, environment `pub.dev`;
-- configure pub.dev trusted publishing for package `keybay_cli`, workflow
-  `release_cli.yml`, tags `keybay_cli-v{{version}}`, environment `pub.dev`;
+- configure pub.dev trusted publishing for package `keybay`: repository
+  `danReynolds/keybay`, tag pattern `v{{version}}`, and required environment
+  `pub.dev`;
+- configure pub.dev trusted publishing for package `keybay_cli`: repository
+  `danReynolds/keybay`, tag pattern `keybay_cli-v{{version}}`, and required
+  environment `pub.dev`. Workflow filenames are repository-side details, not
+  pub.dev trust inputs;
 - retain linear history and no force-push/delete on the Homebrew tap.
 
 The owner-only creation rule is not optional. GitHub executes a tag-push
